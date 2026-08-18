@@ -1137,8 +1137,8 @@ async function cloudPull(self){if(!cloudOn())return;try{const{data,error}=await 
 function roBanner(){return cloudOn()&&!canEdit()?`<div class="robanner">${svg(P.moon,'class="ico" style="width:14px;height:14px;vertical-align:-2px"')} Read-only — <span class="rolog" data-rologin>log in${U()?' as '+U().name:''} to edit</span></div>`:'';}
 function wireRoBanner(app){const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};}
 function cloudPush(){if(pulling||!cloudOn()||!authUser)return;clearTimeout(pushT);pushT=setTimeout(async()=>{try{
-  const r1=await sb.from('profiles').upsert({id:authUser,data:S.users[authUser]});
-  const r2=await sb.from('profiles').upsert({id:'shared',data:{gym:S.gym}});
+  const r1=await sb.from('profiles').update({data:S.users[authUser]}).eq('id',authUser);
+  const r2=await sb.from('profiles').update({data:{gym:S.gym}}).eq('id','shared');
   if((r1&&r1.error)||(r2&&r2.error))toast('⚠ sync failed — check connection');}catch(e){toast('⚠ sync failed — check connection');}},700);}
 async function cloudLogin(pid,password){if(!cloudOn())return false;try{const{error}=await sb.auth.signInWithPassword({email:CLOUD.emails[pid],password});if(error)return false;authUser=pid;await cloudPull(true);cloudPush();return true;}catch(e){return false;}}
 function cloudSubscribe(){if(!cloudOn()||!sb.channel)return;try{sb.channel('profiles-rt').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},payload=>{
