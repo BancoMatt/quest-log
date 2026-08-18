@@ -12,6 +12,9 @@
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="icon" type="image/png" href="icon-192.png" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co; font-src 'self'; base-uri 'self'; form-action 'none'; object-src 'none'" />
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
 <style>
   :root{
     --bg:#14161F; --panel:#1C1F2B; --panel2:#232735; --line:rgba(255,255,255,.06);
@@ -139,6 +142,16 @@
   .welcome{min-height:82vh;display:flex;align-items:center;justify-content:center;text-align:center}
   .wc-hi{font-size:12px;color:var(--muted);letter-spacing:.34em;margin-bottom:12px}
   .wc-name{font-family:Georgia,'Times New Roman',serif;font-size:46px;font-weight:600;font-style:italic;background:linear-gradient(90deg,var(--gold),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent;animation:wcin .8s ease}
+  .loginbox{width:100%;max-width:320px;text-align:center;animation:wcin .5s ease}
+  .ro{font-size:11px;color:var(--muted);letter-spacing:.28em;margin:6px 0 20px}
+  .pwin{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--text);font-size:16px;text-align:center;outline:none;letter-spacing:.15em}
+  .pwin:focus{border-color:var(--gold)}
+  .pwerr{min-height:20px;color:#e06c75;font-size:15px;margin:12px 0 4px;font-weight:600}
+  .pwbtns{display:flex;gap:10px;margin-top:10px}
+  .pwbtns .btn{flex:1;margin:0}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  .robanner{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:rgba(139,124,240,.09);border:1px solid rgba(139,124,240,.28);color:var(--muted);border-radius:12px;padding:9px 13px;margin-bottom:14px;font-size:12.5px}
+  .rolog{margin-left:auto;color:var(--violet);font-weight:600;cursor:pointer;text-decoration:underline}
   @keyframes wcin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
   .overlay{position:fixed;inset:0;background:rgba(10,11,16,.74);z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:calc(env(safe-area-inset-top) + 54px) 16px 16px}
   .sheet{background:var(--panel);border:1px solid var(--line);border-radius:18px;width:100%;max-width:420px;padding:20px;box-shadow:0 24px 64px rgba(0,0,0,.55);animation:wcin .25s ease}
@@ -553,7 +566,7 @@ function fromV3(o){const s=defState(),m=s.users.matt;
   return s;}
 function loadState(){try{const r=localStorage.getItem(KEY);if(r)return JSON.parse(r);
     const v3=localStorage.getItem('quest-log-v3');if(v3){const o=JSON.parse(v3);if(o&&!o.users)return fromV3(o);}}catch(e){}return null;}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}cloudPush();}
 let toastT;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2500);}
 function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
@@ -581,23 +594,24 @@ function checkProgress(){
 }
 
 /* ================= actions ================= */
-function toggleDaily(id){const t=U().daily.find(c=>c.id===id),d=!U().today.done[id];
+function toggleDaily(id){if(!editGuard())return;const t=U().daily.find(c=>c.id===id),d=!U().today.done[id];
   U().today.done[id]=d;U().totalXP+=d?t.xp:-t.xp;addArea(t.area,d?t.xp:-t.xp);U().completions=Math.max(0,(U().completions||0)+(d?1:-1));checkProgress();persist();render();}
-function bumpWeekly(id,dir){const q=WEEKLY.find(w=>w.id===id),k=weekKey();
+function bumpWeekly(id,dir){if(!editGuard())return;const q=WEEKLY.find(w=>w.id===id),k=weekKey();
   U().weekly[k]=U().weekly[k]||{counts:{}};const cur=U().weekly[k].counts[id]||0,nx=Math.max(0,cur+dir);
   if(nx===cur)return;U().weekly[k].counts[id]=nx;
   const delta=(Math.min(nx,q.target)-Math.min(cur,q.target))*q.xp;
   U().totalXP+=delta;addArea(q.area,delta);U().completions=Math.max(0,(U().completions||0)+dir);checkProgress();persist();render();}
-function toggleSide(id){const q=U().today.side.find(x=>x.id===id);U().totalXP+=q.done?-q.xp:q.xp;addArea('productivity',q.done?-q.xp:q.xp);U().completions=Math.max(0,(U().completions||0)+(q.done?-1:1));q.done=!q.done;checkProgress();persist();render();}
-function addSide(name,xp){name=name.trim();if(!name)return;U().today.side.push({id:'s'+Date.now(),name,xp,done:false});persist();render();}
-function delSide(id){const q=U().today.side.find(x=>x.id===id);if(q&&q.done){U().totalXP-=q.xp;addArea('productivity',-q.xp);}U().today.side=U().today.side.filter(x=>x.id!==id);checkProgress();persist();render();}
-function setGoal(k,dx){U()[k]=Math.max(50,U()[k]+dx);checkProgress();persist();render();}
+function toggleSide(id){if(!editGuard())return;const q=U().today.side.find(x=>x.id===id);U().totalXP+=q.done?-q.xp:q.xp;addArea('productivity',q.done?-q.xp:q.xp);U().completions=Math.max(0,(U().completions||0)+(q.done?-1:1));q.done=!q.done;checkProgress();persist();render();}
+function addSide(name,xp){if(!editGuard())return;name=name.trim();if(!name)return;U().today.side.push({id:'s'+Date.now(),name,xp,done:false});persist();render();}
+function delSide(id){if(!editGuard())return;const q=U().today.side.find(x=>x.id===id);if(q&&q.done){U().totalXP-=q.xp;addArea('productivity',-q.xp);}U().today.side=U().today.side.filter(x=>x.id!==id);checkProgress();persist();render();}
+function setGoal(k,dx){if(!editGuard())return;U()[k]=Math.max(50,U()[k]+dx);checkProgress();persist();render();}
 function go(r){route=r;window.scrollTo(0,0);render();}
 
 /* ================= render root ================= */
 function render(){
   const app=document.getElementById('app');
   if(!S.currentUser)return renderPicker(app);
+  if(loginFor)return renderLogin(app,loginFor);
   if(showWelcome)return renderWelcome(app);
   if(route.name==='gym')return renderGym(app);
   if(route.name==='task')return renderTask(app,route.id);
@@ -610,7 +624,7 @@ function renderPicker(app){
       <div class="avatar" style="background:${u.color}22;color:${u.color};border-color:${u.color}">${u.name[0]}</div>
       <div style="flex:1"><div class="pk-name">${u.name}</div><div class="pk-sub mono">Lv ${levelOf(u.totalXP).lvl} · ${u.cleared.length}d cleared</div></div>
       <span class="chev">›</span></div>`).join('')}</div></div>`;
-  app.querySelectorAll('[data-pick]').forEach(e=>e.onclick=()=>{S.currentUser=e.dataset.pick;route={name:'home'};persist();showWelcome=true;render();});
+  app.querySelectorAll('[data-pick]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.pick));
 }
 function renderWelcome(app){
   app.innerHTML=`<div class="welcome"><div><div class="wc-hi mono">Welcome back</div><div class="wc-name">${U().name}</div></div></div>`;
@@ -638,7 +652,7 @@ function renderEditCore(app){
   app.querySelectorAll('.ec-ic').forEach(e=>e.onchange=()=>{u.daily[+e.dataset.i].ic=e.value;persist();});
   app.querySelectorAll('[data-ecdel]').forEach(e=>e.onclick=()=>{u.daily.splice(+e.dataset.ecdel,1);persist();render();});
   const add=()=>{const nm=app.querySelector('#ec_new').value.trim();if(!nm)return;const xp=Math.max(0,Math.round(cnum(app.querySelector('#ec_newxp').value)))||25;
-    u.daily.push({id:'d'+Date.now(),name:nm,xp,cad:'daily',ic:'zap',area:'productivity',coreDaily:true});persist();render();};
+    if(!editGuard())return;u.daily.push({id:'d'+Date.now(),name:nm,xp,cad:'daily',ic:'zap',area:'productivity',coreDaily:true});persist();render();};
   app.querySelector('#ec_add').onclick=add;app.querySelector('#ec_new').onkeydown=e=>{if(e.key==='Enter')add();};
 }
 function profileModalHTML(){
@@ -670,6 +684,7 @@ function renderMain(app){
         <div class="lvltrack"><div class="lvlfill" style="width:${Math.round(into/cost*100)}%"></div></div></div>
     </div>
   </header>
+  ${cloudOn()&&!canEdit()?`<div class="robanner">${svg(P.moon,'class="ico" style="width:14px;height:14px;vertical-align:-2px"')} Viewing ${U().name} — read-only <span class="rolog" data-rologin>Log in to edit</span></div>`:''}
   <div class="toptabs">
     <div class="ttab ${tab==='home'?'on':''}" data-top="home">Quests</div>
     <div class="ttab ${tab==='health'?'on':''}" data-top="health">Health</div>
@@ -691,7 +706,8 @@ function renderMain(app){
   app.querySelectorAll('[data-top]').forEach(e=>e.onclick=()=>{tab=e.dataset.top;applyTab();setLeft(true);});
   let st;pager.onscroll=()=>{clearTimeout(st);st=setTimeout(()=>{const idx=Math.round(pager.scrollLeft/(pager.clientWidth+GAP));const nt=TABS[Math.max(0,Math.min(TABS.length-1,idx))];if(nt&&nt!==tab){tab=nt;applyTab();}},60);};
   const pf=app.querySelector('[data-profile]');if(pf)pf.onclick=()=>{profileOpen=true;render();};
-  const ov=app.querySelector('#ov');if(ov){ov.onclick=e=>{if(e.target===ov){profileOpen=false;render();}};app.querySelector('#ovclose').onclick=()=>{profileOpen=false;render();};app.querySelectorAll('[data-switch]').forEach(e=>e.onclick=()=>{S.currentUser=e.dataset.switch;profileOpen=false;route={name:'home'};persist();showWelcome=true;render();});}
+  const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};
+  const ov=app.querySelector('#ov');if(ov){ov.onclick=e=>{if(e.target===ov){profileOpen=false;render();}};app.querySelector('#ovclose').onclick=()=>{profileOpen=false;render();};app.querySelectorAll('[data-switch]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.switch));}
 }
 
 /* ================= home pane ================= */
@@ -937,11 +953,11 @@ function renderWorkout(host){
   host.querySelectorAll('[data-day]').forEach(e=>e.onclick=()=>{g.sel=+e.dataset.day;persist();render();});
   const dn=host.querySelector('#dayname');dn.oninput=()=>{day.name=dn.value;persist();};
   const exadd=()=>{const v=host.querySelector('#exname').value.trim();if(!v)return;const pick=host.querySelector('#exmus').value;
-    day.ex.push({id:'e'+Date.now(),name:v,mus:pick==='auto'?guessMus(v):[pick]});persist();render();};
+    if(!editGuard())return;day.ex.push({id:'e'+Date.now(),name:v,mus:pick==='auto'?guessMus(v):[pick]});persist();render();};
   host.querySelector('#exadd').onclick=exadd;host.querySelector('#exname').onkeydown=e=>{if(e.key==='Enter')exadd();};
   host.querySelector('#gymdone').onclick=()=>{toggleDaily('gym');render();};
   day.ex.forEach(ex=>{
-    host.querySelectorAll(`[data-addset="${ex.id}"]`).forEach(e=>e.onclick=()=>{const s=ensureSession(today);s.entries[ex.id]=(s.entries[ex.id]||[]).concat([{w:'',r:''}]);persist();render();});
+    host.querySelectorAll(`[data-addset="${ex.id}"]`).forEach(e=>e.onclick=()=>{const s=ensureSession(today);if(!editGuard())return;s.entries[ex.id]=(s.entries[ex.id]||[]).concat([{w:'',r:''}]);persist();render();});
     host.querySelectorAll(`[data-rmset="${ex.id}"]`).forEach(e=>e.onclick=()=>{const a=ensureSession(today).entries[ex.id]||[];a.splice(+e.dataset.i,1);persist();render();});
     host.querySelectorAll(`[data-exdel="${ex.id}"]`).forEach(e=>e.onclick=()=>{day.ex=day.ex.filter(x=>x.id!==ex.id);persist();render();});
     host.querySelectorAll(`[data-set="${ex.id}"]`).forEach(inp=>inp.oninput=()=>{const s=ensureSession(today);const a=s.entries[ex.id]||[];
@@ -1099,7 +1115,48 @@ function wireCalc(root){
   ids.forEach(id=>{const el=f(id);if(el)el.onchange=save;});
   root.querySelectorAll('[data-acc]').forEach(h=>h.onclick=e=>{e.stopPropagation();h.closest('.acc').classList.toggle('open');});
   const btn=f('calcBtn');if(btn)btn.onclick=()=>{save();const rep=computeReport(U().calc.inputs);
-    if(!rep){toast('Enter weight, height & age');return;}U().calc.report=rep;persist();render();toast('✦ Report saved');};
+    if(!editGuard())return;if(!rep){toast('Enter weight, height & age');return;}U().calc.report=rep;persist();render();toast('✦ Report saved');};
+}
+
+/* ================= cloud sync + auth (Supabase) ================= */
+const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
+const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
+  emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app'}};
+let sb=null, authUser=null, loginFor=null, pwFails={}, pulling=false, pushT=null;
+function cloudReady(){return !!(CLOUD.url&&CLOUD.anon&&window.supabase);}
+function cloudOn(){return cloudReady()&&sb!==null;}
+function canEdit(){return cloudOn()?authUser===S.currentUser:true;}
+function editGuard(){if(cloudOn()&&!canEdit()){toast('Read-only · log in to edit');return false;}return true;}
+function initCloud(){if(cloudReady()&&!sb){try{sb=window.supabase.createClient(CLOUD.url,CLOUD.anon,{auth:{persistSession:true,autoRefreshToken:true}});}catch(e){sb=null;}}}
+async function refreshAuth(){if(!cloudOn()){authUser=null;return;}try{const{data}=await sb.auth.getUser();const em=data&&data.user&&data.user.email;authUser=em?(Object.keys(CLOUD.emails).find(k=>CLOUD.emails[k]===em)||null):null;}catch(e){authUser=null;}}
+async function cloudPull(){if(!cloudOn())return;try{const{data,error}=await sb.from('profiles').select('id,data');if(error||!data)return;pulling=true;
+  data.forEach(r=>{const has=r.data&&Object.keys(r.data).length>0;if(!has)return;
+    if(r.id==='shared'){if(r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
+    else if(S.users[r.id]){S.users[r.id]=r.data;}});
+  normalizeGym();normalizeUsers();pulling=false;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}catch(e){pulling=false;}}
+function cloudPush(){if(pulling||!cloudOn()||!authUser)return;clearTimeout(pushT);pushT=setTimeout(async()=>{try{
+  await sb.from('profiles').upsert({id:authUser,data:S.users[authUser]});
+  await sb.from('profiles').upsert({id:'shared',data:{gym:S.gym}});}catch(e){}},700);}
+async function cloudLogin(pid,password){if(!cloudOn())return false;try{const{error}=await sb.auth.signInWithPassword({email:CLOUD.emails[pid],password});if(error)return false;authUser=pid;cloudPush();return true;}catch(e){return false;}}
+function enterProfile(pid){S.currentUser=pid;route={name:'home'};profileOpen=false;persist();
+  if(cloudOn()&&authUser!==pid){loginFor=pid;render();}else{showWelcome=true;render();}}
+function renderLogin(app,pid){
+  const u=S.users[pid],fails=pwFails[pid]||0;
+  app.innerHTML=`<div class="welcome"><div class="loginbox">
+    <div class="wc-hi mono">Welcome back</div>
+    <div class="wc-name">${u.name}</div>
+    <div class="ro mono">( Read-Only )</div>
+    <input id="pw" type="password" class="pwin" placeholder="Password"/>
+    <div class="pwerr">${fails>=2?'fuck u doin bro 😭':''}</div>
+    <div class="pwbtns"><button class="btn ghost" id="roBtn">View read-only</button><button class="btn" id="loginBtn">Log in</button></div>
+  </div></div>`;
+  const done=()=>{loginFor=null;showWelcome=true;render();};
+  app.querySelector('#roBtn').onclick=done;
+  const tryLogin=async()=>{const b=app.querySelector('#loginBtn');b.textContent='…';b.disabled=true;
+    const ok=await cloudLogin(pid,app.querySelector('#pw').value);
+    if(ok){pwFails[pid]=0;done();}else{pwFails[pid]=(pwFails[pid]||0)+1;render();}};
+  app.querySelector('#loginBtn').onclick=tryLogin;
+  app.querySelector('#pw').onkeydown=e=>{if(e.key==='Enter')tryLogin();};
 }
 
 /* ================= boot ================= */
@@ -1110,6 +1167,7 @@ try{
   normalizeGym();normalizeUsers();
   persist();render();
   if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}
+  window.addEventListener('load',()=>{initCloud();if(cloudOn()){refreshAuth().then(cloudPull).then(()=>render());}});
 }catch(err){document.getElementById('app').innerHTML='<div style="color:#8A90A2;font-family:monospace;padding:20px">Reset needed — '+err.message+'</div>';}
 </script>
 </body>
