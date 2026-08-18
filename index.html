@@ -634,7 +634,7 @@ function renderEditCore(app){
   const u=U();
   app.innerHTML=`<div class="back" id="back">${svg(P.arrow,'class="ico"')} Back</div>
     <div class="dtitle">Edit ${u.name}’s core</div>
-    <div class="dsub">Rename, set XP, choose area & icon, or remove. These are ${u.name}’s daily goals.</div>
+    <div class="dsub">Rename, set XP, choose area & icon, or remove. These are ${u.name}’s daily goals.</div>${roBanner()}
     ${u.daily.map((t,i)=>`<div class="panel card" style="padding:12px">
       <input class="ec-nm" data-i="${i}" value="${escapeHtml(t.name)}" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-size:14.5px;outline:none;margin-bottom:8px"/>
       <div style="display:flex;gap:8px;align-items:center">
@@ -645,7 +645,7 @@ function renderEditCore(app){
     <div class="panel card"><div class="mono" style="font-size:10px;color:var(--muted);margin-bottom:8px">Add task</div>
       <div class="addbar"><input id="ec_new" placeholder="New daily task…"/><input id="ec_newxp" inputmode="numeric" value="25" style="max-width:60px;text-align:center"/>
         <button id="ec_add">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div></div>`;
-  app.querySelector('#back').onclick=()=>go({name:'home'});
+  app.querySelector('#back').onclick=()=>go({name:'home'});wireRoBanner(app);
   app.querySelectorAll('.ec-nm').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].name=e.value;persist();});
   app.querySelectorAll('.ec-xp').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].xp=Math.max(0,Math.round(cnum(e.value)));persist();});
   app.querySelectorAll('.ec-area').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].area=e.value;persist();});
@@ -862,9 +862,9 @@ function renderTask(app,id){
   const toggleBtn=U().daily.find(x=>x.id===id)?`<button class="btn ${done?'done':''}" id="marktoggle">${done?'✓ Done today':'Mark done today  +'+t.xp+' XP'}</button>`:'';
   app.innerHTML=`<div class="back" id="back">${svg(P.arrow,'class="ico"')} Back</div>
     <div class="dtitle"><span class="ico" style="width:24px;height:24px;color:var(--gold)">${svg(P[t.ic])}</span>${t.name}</div>
-    <div class="dsub">${t.cad}</div>${body}
+    <div class="dsub">${t.cad}</div>${roBanner()}${body}
     <div style="margin-top:14px">${toggleBtn}</div>`;
-  app.querySelector('#back').onclick=()=>go({name:'home'});
+  app.querySelector('#back').onclick=()=>go({name:'home'});wireRoBanner(app);
   const mt=app.querySelector('#marktoggle');if(mt)mt.onclick=()=>{toggleDaily(id);render();};
   wireTaskBody(app,id,t);
 }
@@ -934,9 +934,9 @@ function renderGym(app){
   const g=S.gym;
   app.innerHTML=`<div class="back" id="back">${svg(P.arrow,'class="ico"')} Back</div>
     <div class="dtitle"><span class="ico" style="width:24px;height:24px;color:var(--gold)">${svg(P.dumbbell)}</span>Gym tracker</div>
-    <div class="seg"><div class="tab ${g.view!=='body'?'on':''}" data-gview="log">Workout</div><div class="tab ${g.view==='body'?'on':''}" data-gview="body">Body map</div></div>
+    ${roBanner()}<div class="seg"><div class="tab ${g.view!=='body'?'on':''}" data-gview="log">Workout</div><div class="tab ${g.view==='body'?'on':''}" data-gview="body">Body map</div></div>
     <div id="gymbody"></div>`;
-  app.querySelector('#back').onclick=()=>go({name:'home'});
+  app.querySelector('#back').onclick=()=>go({name:'home'});wireRoBanner(app);
   app.querySelectorAll('[data-gview]').forEach(e=>e.onclick=()=>{g.view=e.dataset.gview;persist();render();});
   if(g.view==='body')renderBody(app.querySelector('#gymbody'));else renderWorkout(app.querySelector('#gymbody'));
 }
@@ -1129,16 +1129,18 @@ function canEdit(){return cloudOn()?authUser===S.currentUser:true;}
 function editGuard(){if(cloudOn()&&!canEdit()){toast('Read-only · log in to edit');return false;}return true;}
 function initCloud(){if(cloudReady()&&!sb){try{sb=window.supabase.createClient(CLOUD.url,CLOUD.anon,{auth:{persistSession:true,autoRefreshToken:true}});}catch(e){sb=null;}}}
 async function refreshAuth(){if(!cloudOn()){authUser=null;return;}try{const{data}=await sb.auth.getUser();const em=data&&data.user&&data.user.email;authUser=em?(Object.keys(CLOUD.emails).find(k=>CLOUD.emails[k]===em)||null):null;}catch(e){authUser=null;}}
-async function cloudPull(){if(!cloudOn())return;try{const{data,error}=await sb.from('profiles').select('id,data');if(error||!data)return;pulling=true;
+async function cloudPull(self){if(!cloudOn())return;try{const{data,error}=await sb.from('profiles').select('id,data');if(error||!data)return;pulling=true;
   data.forEach(r=>{const has=r.data&&Object.keys(r.data).length>0;if(!has)return;
-    if(r.id==='shared'){if(r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
-    else if(S.users[r.id]){S.users[r.id]=r.data;}});
+    if(r.id==='shared'){if(!self&&authUser)return;if(r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
+    else{if(r.id===authUser&&!self)return;if(S.users[r.id])S.users[r.id]=r.data;}});
   normalizeGym();normalizeUsers();pulling=false;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}catch(e){pulling=false;}}
+function roBanner(){return cloudOn()&&!canEdit()?`<div class="robanner">${svg(P.moon,'class="ico" style="width:14px;height:14px;vertical-align:-2px"')} Read-only — <span class="rolog" data-rologin>log in${U()?' as '+U().name:''} to edit</span></div>`:'';}
+function wireRoBanner(app){const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};}
 function cloudPush(){if(pulling||!cloudOn()||!authUser)return;clearTimeout(pushT);pushT=setTimeout(async()=>{try{
   const r1=await sb.from('profiles').upsert({id:authUser,data:S.users[authUser]});
   const r2=await sb.from('profiles').upsert({id:'shared',data:{gym:S.gym}});
   if((r1&&r1.error)||(r2&&r2.error))toast('⚠ sync failed — check connection');}catch(e){toast('⚠ sync failed — check connection');}},700);}
-async function cloudLogin(pid,password){if(!cloudOn())return false;try{const{error}=await sb.auth.signInWithPassword({email:CLOUD.emails[pid],password});if(error)return false;authUser=pid;await cloudPull();cloudPush();return true;}catch(e){return false;}}
+async function cloudLogin(pid,password){if(!cloudOn())return false;try{const{error}=await sb.auth.signInWithPassword({email:CLOUD.emails[pid],password});if(error)return false;authUser=pid;await cloudPull(true);cloudPush();return true;}catch(e){return false;}}
 function cloudSubscribe(){if(!cloudOn()||!sb.channel)return;try{sb.channel('profiles-rt').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},payload=>{
   const r=payload.new;if(!r||!r.id||r.id===authUser)return;
   if(r.id==='shared'){if(r.data&&r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
@@ -1173,7 +1175,7 @@ try{
   normalizeGym();normalizeUsers();
   persist();render();
   if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}
-  window.addEventListener('load',()=>{initCloud();if(cloudOn()){refreshAuth().then(cloudPull).then(()=>{render();cloudSubscribe();});
+  window.addEventListener('load',()=>{initCloud();if(cloudOn()){refreshAuth().then(()=>cloudPull(true)).then(()=>{render();cloudSubscribe();});
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cloudOn())cloudPull().then(()=>render());});
     window.addEventListener('focus',()=>{if(cloudOn())cloudPull().then(()=>render());});}});
 }catch(err){document.getElementById('app').innerHTML='<div style="color:#8A90A2;font-family:monospace;padding:20px">Reset needed — '+err.message+'</div>';}
