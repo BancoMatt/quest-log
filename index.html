@@ -669,6 +669,7 @@ function profileModalHTML(){
     <div class="pk-grid">${Object.entries(S.users).map(([id,us])=>`<div class="pk-card" data-switch="${id}" style="${id===S.currentUser?'border-color:'+us.color:''}">
       <div class="avatar" style="width:38px;height:38px;border-radius:11px;font-size:17px;background:${us.color}22;color:${us.color};border-color:${us.color}">${us.name[0]}</div>
       <div style="flex:1"><div class="pk-name" style="font-size:15px">${us.name}</div></div><div class="pk-sub mono">Lv ${levelOf(us.totalXP).lvl}</div></div>`).join('')}</div>
+    ${cloudOn()?`<button class="btn ghost" id="cloudreload" style="margin-top:14px">↻ Reload from cloud</button>`:''}
     <div class="mono" style="font-size:9px;color:var(--muted);text-align:center;margin-top:16px;opacity:.7">${APP_VERSION} · ${cloudOn()?(authUser===S.currentUser?'cloud: logged in':'cloud: read-only'):'local only'}</div>
   </div></div>`;
 }
@@ -708,7 +709,8 @@ function renderMain(app){
   let st;pager.onscroll=()=>{clearTimeout(st);st=setTimeout(()=>{const idx=Math.round(pager.scrollLeft/(pager.clientWidth+GAP));const nt=TABS[Math.max(0,Math.min(TABS.length-1,idx))];if(nt&&nt!==tab){tab=nt;applyTab();}},60);};
   const pf=app.querySelector('[data-profile]');if(pf)pf.onclick=()=>{profileOpen=true;render();};
   const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};
-  const ov=app.querySelector('#ov');if(ov){ov.onclick=e=>{if(e.target===ov){profileOpen=false;render();}};app.querySelector('#ovclose').onclick=()=>{profileOpen=false;render();};app.querySelectorAll('[data-switch]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.switch));}
+  const ov=app.querySelector('#ov');if(ov){ov.onclick=e=>{if(e.target===ov){profileOpen=false;render();}};app.querySelector('#ovclose').onclick=()=>{profileOpen=false;render();};app.querySelectorAll('[data-switch]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.switch));
+    const cr=app.querySelector('#cloudreload');if(cr)cr.onclick=async()=>{cr.textContent='↻ …';dirty=false;await cloudPull(true);profileOpen=false;render();toast('↻ Synced from cloud');};}
 }
 
 /* ================= home pane ================= */
@@ -1120,7 +1122,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v7 · converge';
+const APP_VERSION='v8 · flush-on-close';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app'}};
@@ -1147,7 +1149,14 @@ function cloudSubscribe(){if(!cloudOn()||!sb.channel)return;try{sb.channel('prof
   const r=payload.new;if(!r||!r.id)return;if(dirty)return;
   if(r.id==='shared'){if(r.data&&r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
   else if(S.users[r.id]&&r.data&&Object.keys(r.data).length){S.users[r.id]=r.data;}
-  normalizeGym();normalizeUsers();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}render();}).subscribe();}catch(e){}}
+  normalizeGym();normalizeUsers();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}syncRender();}).subscribe();}catch(e){}}
+async function flushNow(){if(!cloudOn()||!authUser||!dirty)return;clearTimeout(pushT);try{
+  const r1=await sb.from('profiles').update({data:S.users[authUser]}).eq('id',authUser);
+  const r2=await sb.from('profiles').update({data:{gym:S.gym}}).eq('id','shared');
+  if(!((r1&&r1.error)||(r2&&r2.error)))dirty=false;}catch(e){}}
+function typing(){const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);}
+function syncRender(){if(typing())return;render();}
+async function reconcile(){if(!cloudOn())return;await flushNow();if(!dirty)await cloudPull(true);syncRender();}
 function enterProfile(pid){S.currentUser=pid;route={name:'home'};profileOpen=false;persist();
   if(cloudOn()&&authUser!==pid){loginFor=pid;render();}else{showWelcome=true;render();}}
 function renderLogin(app,pid){
@@ -1179,8 +1188,10 @@ try{
   if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});
     let _refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(_refreshing)return;_refreshing=true;location.reload();});}
   window.addEventListener('load',()=>{initCloud();if(cloudOn()){refreshAuth().then(()=>cloudPull(true)).then(()=>{render();cloudSubscribe();});
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cloudOn())cloudPull().then(()=>render());});
-    window.addEventListener('focus',()=>{if(cloudOn())cloudPull().then(()=>render());});}});
+    document.addEventListener('visibilitychange',()=>{if(!cloudOn())return;if(document.visibilityState==='hidden')flushNow();else reconcile();});
+    window.addEventListener('focus',()=>{if(cloudOn())reconcile();});
+    window.addEventListener('pagehide',()=>{if(cloudOn())flushNow();});
+    window.addEventListener('blur',()=>{if(cloudOn())flushNow();});}});
 }catch(err){document.getElementById('app').innerHTML='<div style="color:#8A90A2;font-family:monospace;padding:20px">Reset needed — '+err.message+'</div>';}
 </script>
 </body>
