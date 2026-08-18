@@ -1120,11 +1120,11 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v6 · update-sync';
+const APP_VERSION='v7 · converge';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app'}};
-let sb=null, authUser=null, loginFor=null, pwFails={}, pulling=false, pushT=null;
+let sb=null, authUser=null, loginFor=null, pwFails={}, pulling=false, pushT=null, dirty=false;
 function cloudReady(){return !!(CLOUD.url&&CLOUD.anon&&window.supabase);}
 function cloudOn(){return cloudReady()&&sb!==null;}
 function canEdit(){return cloudOn()?authUser===S.currentUser:true;}
@@ -1133,18 +1133,18 @@ function initCloud(){if(cloudReady()&&!sb){try{sb=window.supabase.createClient(C
 async function refreshAuth(){if(!cloudOn()){authUser=null;return;}try{const{data}=await sb.auth.getUser();const em=data&&data.user&&data.user.email;authUser=em?(Object.keys(CLOUD.emails).find(k=>CLOUD.emails[k]===em)||null):null;}catch(e){authUser=null;}}
 async function cloudPull(self){if(!cloudOn())return;try{const{data,error}=await sb.from('profiles').select('id,data');if(error||!data)return;pulling=true;
   data.forEach(r=>{const has=r.data&&Object.keys(r.data).length>0;if(!has)return;
-    if(r.id==='shared'){if(!self&&authUser)return;if(r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
-    else{if(r.id===authUser&&!self)return;if(S.users[r.id])S.users[r.id]=r.data;}});
+    if(r.id==='shared'){if(!self&&dirty)return;if(r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
+    else{if(r.id===authUser&&!self&&dirty)return;if(S.users[r.id])S.users[r.id]=r.data;}});
   normalizeGym();normalizeUsers();pulling=false;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}catch(e){pulling=false;}}
 function roBanner(){return cloudOn()&&!canEdit()?`<div class="robanner">${svg(P.moon,'class="ico" style="width:14px;height:14px;vertical-align:-2px"')} Read-only — <span class="rolog" data-rologin>log in${U()?' as '+U().name:''} to edit</span></div>`:'';}
 function wireRoBanner(app){const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};}
-function cloudPush(){if(pulling||!cloudOn()||!authUser)return;clearTimeout(pushT);pushT=setTimeout(async()=>{try{
+function cloudPush(){if(pulling||!cloudOn()||!authUser)return;dirty=true;clearTimeout(pushT);pushT=setTimeout(async()=>{try{
   const r1=await sb.from('profiles').update({data:S.users[authUser]}).eq('id',authUser);
   const r2=await sb.from('profiles').update({data:{gym:S.gym}}).eq('id','shared');
-  if((r1&&r1.error)||(r2&&r2.error))toast('⚠ sync failed — check connection');}catch(e){toast('⚠ sync failed — check connection');}},700);}
+  if((r1&&r1.error)||(r2&&r2.error)){toast('⚠ sync failed — check connection');}else{dirty=false;}}catch(e){toast('⚠ sync failed — check connection');}},700);}
 async function cloudLogin(pid,password){if(!cloudOn())return false;try{const{error}=await sb.auth.signInWithPassword({email:CLOUD.emails[pid],password});if(error)return false;authUser=pid;await cloudPull(true);cloudPush();return true;}catch(e){return false;}}
 function cloudSubscribe(){if(!cloudOn()||!sb.channel)return;try{sb.channel('profiles-rt').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},payload=>{
-  const r=payload.new;if(!r||!r.id||r.id===authUser)return;
+  const r=payload.new;if(!r||!r.id)return;if(dirty)return;
   if(r.id==='shared'){if(r.data&&r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
   else if(S.users[r.id]&&r.data&&Object.keys(r.data).length){S.users[r.id]=r.data;}
   normalizeGym();normalizeUsers();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}render();}).subscribe();}catch(e){}}
