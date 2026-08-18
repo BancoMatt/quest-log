@@ -646,11 +646,11 @@ function renderEditCore(app){
       <div class="addbar"><input id="ec_new" placeholder="New daily task…"/><input id="ec_newxp" inputmode="numeric" value="25" style="max-width:60px;text-align:center"/>
         <button id="ec_add">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div></div>`;
   app.querySelector('#back').onclick=()=>go({name:'home'});
-  app.querySelectorAll('.ec-nm').forEach(e=>e.onchange=()=>{u.daily[+e.dataset.i].name=e.value;persist();});
-  app.querySelectorAll('.ec-xp').forEach(e=>e.onchange=()=>{u.daily[+e.dataset.i].xp=Math.max(0,Math.round(cnum(e.value)));persist();});
-  app.querySelectorAll('.ec-area').forEach(e=>e.onchange=()=>{u.daily[+e.dataset.i].area=e.value;persist();});
-  app.querySelectorAll('.ec-ic').forEach(e=>e.onchange=()=>{u.daily[+e.dataset.i].ic=e.value;persist();});
-  app.querySelectorAll('[data-ecdel]').forEach(e=>e.onclick=()=>{u.daily.splice(+e.dataset.ecdel,1);persist();render();});
+  app.querySelectorAll('.ec-nm').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].name=e.value;persist();});
+  app.querySelectorAll('.ec-xp').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].xp=Math.max(0,Math.round(cnum(e.value)));persist();});
+  app.querySelectorAll('.ec-area').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].area=e.value;persist();});
+  app.querySelectorAll('.ec-ic').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].ic=e.value;persist();});
+  app.querySelectorAll('[data-ecdel]').forEach(e=>e.onclick=()=>{if(!editGuard())return;u.daily.splice(+e.dataset.ecdel,1);persist();render();});
   const add=()=>{const nm=app.querySelector('#ec_new').value.trim();if(!nm)return;const xp=Math.max(0,Math.round(cnum(app.querySelector('#ec_newxp').value)))||25;
     if(!editGuard())return;u.daily.push({id:'d'+Date.now(),name:nm,xp,cad:'daily',ic:'zap',area:'productivity',coreDaily:true});persist();render();};
   app.querySelector('#ec_add').onclick=add;app.querySelector('#ec_new').onkeydown=e=>{if(e.key==='Enter')add();};
@@ -817,10 +817,10 @@ function wireGro(root){
   const refresh=()=>{inline.innerHTML=groceryInner();const left=U().grocery.filter(g=>!g.checked).length;
     const sum=root.querySelector('#groSum');if(sum)sum.textContent=left?left+' to buy · tap to expand':'nothing to buy · tap to add';
     persist();wireGro(root);};
-  inline.querySelectorAll('[data-gro]').forEach(e=>e.onclick=()=>{const g=U().grocery.find(x=>x.id===e.dataset.gro);g.checked=!g.checked;refresh();});
-  inline.querySelectorAll('[data-grodel]').forEach(e=>e.onclick=()=>{U().grocery=U().grocery.filter(x=>x.id!==e.dataset.grodel);refresh();});
-  const clear=inline.querySelector('#groclear');if(clear)clear.onclick=()=>{U().grocery=U().grocery.filter(g=>!g.checked);refresh();};
-  const add=()=>{const v=inline.querySelector('#groname').value.trim();if(!v)return;U().grocery.push({id:'g'+Date.now(),name:v,checked:false});refresh();
+  inline.querySelectorAll('[data-gro]').forEach(e=>e.onclick=()=>{if(!editGuard())return;const g=U().grocery.find(x=>x.id===e.dataset.gro);g.checked=!g.checked;refresh();});
+  inline.querySelectorAll('[data-grodel]').forEach(e=>e.onclick=()=>{if(!editGuard())return;U().grocery=U().grocery.filter(x=>x.id!==e.dataset.grodel);refresh();});
+  const clear=inline.querySelector('#groclear');if(clear)clear.onclick=()=>{if(!editGuard())return;U().grocery=U().grocery.filter(g=>!g.checked);refresh();};
+  const add=()=>{if(!editGuard())return;const v=inline.querySelector('#groname').value.trim();if(!v)return;U().grocery.push({id:'g'+Date.now(),name:v,checked:false});refresh();
     const ni=root.querySelector('#groname');if(ni)ni.focus();};
   inline.querySelector('#groadd').onclick=add;inline.querySelector('#groname').onkeydown=e=>{if(e.key==='Enter')add();};
 }
@@ -882,18 +882,18 @@ function shutdownHTML(){return `<div class="panel card"><div class="mono" style=
   <button class="btn" id="sdsave" style="margin-top:10px">Save to log</button>
   ${U().shutdownLog.slice(-7).reverse().map(e=>`<div class="logentry"><div class="d">${e.date}</div><div class="x">${escapeHtml(e.text)}</div></div>`).join('')}</div>`;}
 function wireTaskBody(app,id,t){
-  const note=app.querySelector('#note');if(note)note.oninput=()=>{U().notes[id]=note.value;persist();};
-  const bookadd=app.querySelector('#bookadd');if(bookadd){const add=()=>{const v=app.querySelector('#bookname').value.trim();if(!v)return;
+  const note=app.querySelector('#note');if(note){note.readOnly=!canEdit();note.oninput=()=>{if(!editGuard())return;U().notes[id]=note.value;persist();};}
+  const bookadd=app.querySelector('#bookadd');if(bookadd){const add=()=>{if(!editGuard())return;const v=app.querySelector('#bookname').value.trim();if(!v)return;
     U().books.push({id:'b'+Date.now(),title:v,status:'want'});persist();render();};
     bookadd.onclick=add;app.querySelector('#bookname').onkeydown=e=>{if(e.key==='Enter')add();};}
-  app.querySelectorAll('[data-book]').forEach(e=>e.onclick=()=>{const b=U().books.find(x=>x.id===e.dataset.book);
+  app.querySelectorAll('[data-book]').forEach(e=>e.onclick=()=>{if(!editGuard())return;const b=U().books.find(x=>x.id===e.dataset.book);
     const order=['want','reading','done'];const was=b.status;b.status=order[(order.indexOf(b.status)+1)%3];
     if(b.status==='done'&&was!=='done'){U().totalXP+=BOOK_BONUS;addArea('knowledge',BOOK_BONUS);toast('📖 Book finished +'+BOOK_BONUS);}
     if(was==='done'&&b.status!=='done'){U().totalXP-=BOOK_BONUS;addArea('knowledge',-BOOK_BONUS);}persist();render();});
-  app.querySelectorAll('[data-bookdel]').forEach(e=>e.onclick=()=>{const b=U().books.find(x=>x.id===e.dataset.bookdel);
+  app.querySelectorAll('[data-bookdel]').forEach(e=>e.onclick=()=>{if(!editGuard())return;const b=U().books.find(x=>x.id===e.dataset.bookdel);
     if(b&&b.status==='done'){U().totalXP-=BOOK_BONUS;addArea('knowledge',-BOOK_BONUS);}U().books=U().books.filter(x=>x.id!==e.dataset.bookdel);persist();render();});
   if(app.querySelector('#groInline'))wireGro(app);
-  const sdsave=app.querySelector('#sdsave');if(sdsave)sdsave.onclick=()=>{const v=app.querySelector('#sdtext').value.trim();if(!v)return;
+  const sdsave=app.querySelector('#sdsave');if(sdsave)sdsave.onclick=()=>{if(!editGuard())return;const v=app.querySelector('#sdtext').value.trim();if(!v)return;
     U().shutdownLog.push({date:dstr(),text:v});persist();render();toast('✦ Logged');};
 }
 
@@ -951,17 +951,17 @@ function renderWorkout(host){
       <button id="exadd">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div>
     <button class="btn ${U().today.done.gym?'done':''}" id="gymdone" style="margin-top:16px">${U().today.done.gym?'✓ Workout logged today':'Mark workout done  +50 XP'}</button>`;
   host.querySelectorAll('[data-day]').forEach(e=>e.onclick=()=>{g.sel=+e.dataset.day;persist();render();});
-  const dn=host.querySelector('#dayname');dn.oninput=()=>{day.name=dn.value;persist();};
+  const dn=host.querySelector('#dayname');dn.readOnly=!canEdit();dn.oninput=()=>{if(!editGuard())return;day.name=dn.value;persist();};
   const exadd=()=>{const v=host.querySelector('#exname').value.trim();if(!v)return;const pick=host.querySelector('#exmus').value;
     if(!editGuard())return;day.ex.push({id:'e'+Date.now(),name:v,mus:pick==='auto'?guessMus(v):[pick]});persist();render();};
   host.querySelector('#exadd').onclick=exadd;host.querySelector('#exname').onkeydown=e=>{if(e.key==='Enter')exadd();};
   host.querySelector('#gymdone').onclick=()=>{toggleDaily('gym');render();};
   day.ex.forEach(ex=>{
     host.querySelectorAll(`[data-addset="${ex.id}"]`).forEach(e=>e.onclick=()=>{const s=ensureSession(today);if(!editGuard())return;s.entries[ex.id]=(s.entries[ex.id]||[]).concat([{w:'',r:''}]);persist();render();});
-    host.querySelectorAll(`[data-rmset="${ex.id}"]`).forEach(e=>e.onclick=()=>{const a=ensureSession(today).entries[ex.id]||[];a.splice(+e.dataset.i,1);persist();render();});
-    host.querySelectorAll(`[data-exdel="${ex.id}"]`).forEach(e=>e.onclick=()=>{day.ex=day.ex.filter(x=>x.id!==ex.id);persist();render();});
-    host.querySelectorAll(`[data-set="${ex.id}"]`).forEach(inp=>inp.oninput=()=>{const s=ensureSession(today);const a=s.entries[ex.id]||[];
-      const i=+inp.dataset.i,f=inp.dataset.f;if(!a[i])a[i]={w:'',r:''};a[i][f]=inp.value;s.entries[ex.id]=a;persist();});
+    host.querySelectorAll(`[data-rmset="${ex.id}"]`).forEach(e=>e.onclick=()=>{if(!editGuard())return;const a=ensureSession(today).entries[ex.id]||[];a.splice(+e.dataset.i,1);persist();render();});
+    host.querySelectorAll(`[data-exdel="${ex.id}"]`).forEach(e=>e.onclick=()=>{if(!editGuard())return;day.ex=day.ex.filter(x=>x.id!==ex.id);persist();render();});
+    host.querySelectorAll(`[data-set="${ex.id}"]`).forEach(inp=>{inp.readOnly=!canEdit();inp.oninput=()=>{if(!editGuard())return;const s=ensureSession(today);const a=s.entries[ex.id]||[];
+      const i=+inp.dataset.i,f=inp.dataset.f;if(!a[i])a[i]={w:'',r:''};a[i][f]=inp.value;s.entries[ex.id]=a;persist();};});
   });
 }
 function renderBody(host){
@@ -1135,9 +1135,15 @@ async function cloudPull(){if(!cloudOn())return;try{const{data,error}=await sb.f
     else if(S.users[r.id]){S.users[r.id]=r.data;}});
   normalizeGym();normalizeUsers();pulling=false;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}catch(e){pulling=false;}}
 function cloudPush(){if(pulling||!cloudOn()||!authUser)return;clearTimeout(pushT);pushT=setTimeout(async()=>{try{
-  await sb.from('profiles').upsert({id:authUser,data:S.users[authUser]});
-  await sb.from('profiles').upsert({id:'shared',data:{gym:S.gym}});}catch(e){}},700);}
-async function cloudLogin(pid,password){if(!cloudOn())return false;try{const{error}=await sb.auth.signInWithPassword({email:CLOUD.emails[pid],password});if(error)return false;authUser=pid;cloudPush();return true;}catch(e){return false;}}
+  const r1=await sb.from('profiles').upsert({id:authUser,data:S.users[authUser]});
+  const r2=await sb.from('profiles').upsert({id:'shared',data:{gym:S.gym}});
+  if((r1&&r1.error)||(r2&&r2.error))toast('⚠ sync failed — check connection');}catch(e){toast('⚠ sync failed — check connection');}},700);}
+async function cloudLogin(pid,password){if(!cloudOn())return false;try{const{error}=await sb.auth.signInWithPassword({email:CLOUD.emails[pid],password});if(error)return false;authUser=pid;await cloudPull();cloudPush();return true;}catch(e){return false;}}
+function cloudSubscribe(){if(!cloudOn()||!sb.channel)return;try{sb.channel('profiles-rt').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},payload=>{
+  const r=payload.new;if(!r||!r.id||r.id===authUser)return;
+  if(r.id==='shared'){if(r.data&&r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
+  else if(S.users[r.id]&&r.data&&Object.keys(r.data).length){S.users[r.id]=r.data;}
+  normalizeGym();normalizeUsers();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}render();}).subscribe();}catch(e){}}
 function enterProfile(pid){S.currentUser=pid;route={name:'home'};profileOpen=false;persist();
   if(cloudOn()&&authUser!==pid){loginFor=pid;render();}else{showWelcome=true;render();}}
 function renderLogin(app,pid){
@@ -1167,7 +1173,9 @@ try{
   normalizeGym();normalizeUsers();
   persist();render();
   if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}
-  window.addEventListener('load',()=>{initCloud();if(cloudOn()){refreshAuth().then(cloudPull).then(()=>render());}});
+  window.addEventListener('load',()=>{initCloud();if(cloudOn()){refreshAuth().then(cloudPull).then(()=>{render();cloudSubscribe();});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cloudOn())cloudPull().then(()=>render());});
+    window.addEventListener('focus',()=>{if(cloudOn())cloudPull().then(()=>render());});}});
 }catch(err){document.getElementById('app').innerHTML='<div style="color:#8A90A2;font-family:monospace;padding:20px">Reset needed — '+err.message+'</div>';}
 </script>
 </body>
