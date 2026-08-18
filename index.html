@@ -547,7 +547,7 @@ function defUser(name,color){return{name,color,created:dstr(),completions:0,
   history:{},weekly:{},areaXP:{markets:0,health:0,knowledge:0,business:0,productivity:0},
   books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{}};}
 function defState(){return{currentUser:null,
-  users:{matt:defUser('Matt','#F2B14C'),jerry:defUser('Jerry','#5AA9E6'),alexio:defUser('Alexio','#56C596')},
+  users:{matt:defUser('Matt','#F2B14C'),jerry:defUser('Jerry','#5AA9E6'),alexio:defUser('Alexio','#56C596'),d4:defUser('D4','#E8618C')},
   gym:defGym()};}
 
 let S,route={name:'home'},tab='home',showWelcome=false,profileOpen=false;
@@ -557,7 +557,8 @@ function guessMus(name){name=(name||'').toLowerCase();const R=[['incline',['ches
 function normalizeGym(){if(!S.gym||S.gym.ver!==GYM_VER){const keep=S.gym||{};S.gym=defGym();S.gym.view=keep.view||'log';S.gym.sel=Math.min(keep.sel||0,S.gym.days.length-1);}
   if(S.gym.view===undefined)S.gym.view='log';
   (S.gym.days||[]).forEach(d=>d.ex.forEach(e=>{if(!Array.isArray(e.mus))e.mus=guessMus(e.name);}));}
-function normalizeUsers(){const du=defUser('x','#fff');for(const id in S.users){const u=S.users[id];
+function normalizeUsers(){const defs=defState().users;for(const id in defs)if(!S.users[id])S.users[id]=defs[id];
+  const du=defUser('x','#fff');for(const id in S.users){const u=S.users[id];
   for(const k in du)if(u[k]===undefined)u[k]=du[k];
   if(!u.today||u.today.date!==dstr())u.today=freshDay(dstr());}}
 function fromV3(o){const s=defState(),m=s.users.matt;
@@ -710,7 +711,7 @@ function renderMain(app){
   const pf=app.querySelector('[data-profile]');if(pf)pf.onclick=()=>{profileOpen=true;render();};
   const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};
   const ov=app.querySelector('#ov');if(ov){ov.onclick=e=>{if(e.target===ov){profileOpen=false;render();}};app.querySelector('#ovclose').onclick=()=>{profileOpen=false;render();};app.querySelectorAll('[data-switch]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.switch));
-    const cs=app.querySelector('#cloudsave');if(cs)cs.onclick=async()=>{cs.textContent='↑ …';try{const r=await sb.from('profiles').update({data:S.users[S.currentUser]}).eq('id',S.currentUser);if(r&&r.error){toast('save failed: '+r.error.message);}else{synced=true;dirty=false;toast('↑ Saved this device to cloud');}}catch(e){toast('save failed');}};
+    const cs=app.querySelector('#cloudsave');if(cs)cs.onclick=async()=>{cs.textContent='↑ …';try{S.users[S.currentUser]._v=Date.now();const r=await sb.from('profiles').update({data:S.users[S.currentUser]}).eq('id',S.currentUser);if(r&&r.error){toast('save failed: '+r.error.message);}else{synced=true;dirty=false;toast('↑ Saved this device to cloud');}}catch(e){toast('save failed');}};
     const cr=app.querySelector('#cloudreload');if(cr)cr.onclick=async()=>{cr.textContent='↻ …';
       try{const {data}=await sb.from('profiles').select('data').eq('id',S.currentUser).single();const d=(data&&data.data)||{};const done=d.today&&d.today.done?Object.values(d.today.done).filter(Boolean).length:0;const gro=(d.grocery||[]).length;toast('cloud has: '+done+' checked · '+gro+' grocery · '+(d.totalXP||0)+' XP');}catch(e){}
       dirty=false;synced=true;await cloudPull(true);profileOpen=false;render();};}
@@ -1125,10 +1126,10 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v9 · safe-sync';
+const APP_VERSION='v11 · +D4';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
-  emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app'}};
+  emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app'}};
 let sb=null, authUser=null, loginFor=null, pwFails={}, pulling=false, pushT=null, dirty=false, synced=false;
 function cloudReady(){return !!(CLOUD.url&&CLOUD.anon&&window.supabase);}
 function cloudOn(){return cloudReady()&&sb!==null;}
@@ -1138,28 +1139,30 @@ function initCloud(){if(cloudReady()&&!sb){try{sb=window.supabase.createClient(C
 async function refreshAuth(){if(!cloudOn()){authUser=null;return;}try{const{data}=await sb.auth.getUser();const em=data&&data.user&&data.user.email;authUser=em?(Object.keys(CLOUD.emails).find(k=>CLOUD.emails[k]===em)||null):null;}catch(e){authUser=null;}}
 async function cloudPull(self){if(!cloudOn())return;try{const{data,error}=await sb.from('profiles').select('id,data');if(error||!data)return;synced=true;pulling=true;
   data.forEach(r=>{const has=r.data&&Object.keys(r.data).length>0;if(!has)return;
+    const cloudV=(r.data._v)||0,localV=(S.users[r.id]&&S.users[r.id]._v)||0;
     if(r.id==='shared'){if(!self&&dirty)return;if(r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
-    else{if(r.id===authUser&&!self&&dirty)return;if(S.users[r.id])S.users[r.id]=r.data;}});
+    else if(r.id===authUser){if(!self&&dirty&&cloudV<=localV)return;S.users[r.id]=r.data;dirty=false;}
+    else if(S.users[r.id]){S.users[r.id]=r.data;}});
   normalizeGym();normalizeUsers();pulling=false;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}catch(e){pulling=false;}}
 function roBanner(){return cloudOn()&&!canEdit()?`<div class="robanner">${svg(P.moon,'class="ico" style="width:14px;height:14px;vertical-align:-2px"')} Read-only — <span class="rolog" data-rologin>log in${U()?' as '+U().name:''} to edit</span></div>`:'';}
 function wireRoBanner(app){const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};}
-function cloudPush(){if(pulling||!cloudOn()||!authUser||!synced)return;dirty=true;clearTimeout(pushT);pushT=setTimeout(async()=>{try{
+function cloudPush(){if(pulling||!cloudOn()||!authUser||!synced)return;dirty=true;S.users[authUser]._v=Date.now();clearTimeout(pushT);pushT=setTimeout(async()=>{try{
   const r1=await sb.from('profiles').update({data:S.users[authUser]}).eq('id',authUser);
   const r2=await sb.from('profiles').update({data:{gym:S.gym}}).eq('id','shared');
   if((r1&&r1.error)||(r2&&r2.error)){toast('⚠ sync failed — check connection');}else{dirty=false;}}catch(e){toast('⚠ sync failed — check connection');}},700);}
 async function cloudLogin(pid,password){if(!cloudOn())return false;try{const{error}=await sb.auth.signInWithPassword({email:CLOUD.emails[pid],password});if(error)return false;authUser=pid;await cloudPull(true);return true;}catch(e){return false;}}
 function cloudSubscribe(){if(!cloudOn()||!sb.channel)return;try{sb.channel('profiles-rt').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},payload=>{
-  const r=payload.new;if(!r||!r.id)return;if(dirty)return;
-  if(r.id==='shared'){if(r.data&&r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
-  else if(S.users[r.id]&&r.data&&Object.keys(r.data).length){S.users[r.id]=r.data;}
+  const r=payload.new;if(!r||!r.id)return;const cloudV=(r.data&&r.data._v)||0,localV=(S.users[r.id]&&S.users[r.id]._v)||0;
+  if(r.id==='shared'){if(dirty)return;if(r.data&&r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
+  else{if(r.id===authUser&&dirty&&cloudV<=localV)return;if(S.users[r.id]&&r.data&&Object.keys(r.data).length){S.users[r.id]=r.data;if(r.id===authUser)dirty=false;}}
   normalizeGym();normalizeUsers();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}syncRender();}).subscribe();}catch(e){}}
-async function flushNow(){if(!cloudOn()||!authUser||!dirty||!synced)return;clearTimeout(pushT);try{
+async function flushNow(){if(!cloudOn()||!authUser||!dirty||!synced)return;clearTimeout(pushT);S.users[authUser]._v=Date.now();try{
   const r1=await sb.from('profiles').update({data:S.users[authUser]}).eq('id',authUser);
   const r2=await sb.from('profiles').update({data:{gym:S.gym}}).eq('id','shared');
   if(!((r1&&r1.error)||(r2&&r2.error)))dirty=false;}catch(e){}}
 function typing(){const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);}
 function syncRender(){if(typing())return;render();}
-async function reconcile(){if(!cloudOn())return;await flushNow();if(!dirty)await cloudPull(true);syncRender();}
+async function reconcile(){if(!cloudOn())return;await cloudPull(false);if(dirty)await flushNow();syncRender();}
 function enterProfile(pid){S.currentUser=pid;route={name:'home'};profileOpen=false;persist();
   if(cloudOn()&&authUser!==pid){loginFor=pid;render();}else{showWelcome=true;render();}}
 function renderLogin(app,pid){

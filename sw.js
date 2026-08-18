@@ -1,5 +1,5 @@
 /* Quest Log service worker — NETWORK-FIRST for app files so updates always propagate. */
-const C = 'questlog-v9';
+const C = 'questlog-v11';
 const ASSETS = ['./','./index.html','./config.js','./manifest.webmanifest','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
