@@ -669,6 +669,7 @@ function profileModalHTML(){
     <div class="pk-grid">${Object.entries(S.users).map(([id,us])=>`<div class="pk-card" data-switch="${id}" style="${id===S.currentUser?'border-color:'+us.color:''}">
       <div class="avatar" style="width:38px;height:38px;border-radius:11px;font-size:17px;background:${us.color}22;color:${us.color};border-color:${us.color}">${us.name[0]}</div>
       <div style="flex:1"><div class="pk-name" style="font-size:15px">${us.name}</div></div><div class="pk-sub mono">Lv ${levelOf(us.totalXP).lvl}</div></div>`).join('')}</div>
+    <div class="mono" style="font-size:9px;color:var(--muted);text-align:center;margin-top:16px;opacity:.7">${APP_VERSION} · ${cloudOn()?(authUser===S.currentUser?'cloud: logged in':'cloud: read-only'):'local only'}</div>
   </div></div>`;
 }
 function renderMain(app){
@@ -1119,6 +1120,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
+const APP_VERSION='v6 · update-sync';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app'}};
@@ -1174,7 +1176,8 @@ try{
   if(!S.users)S.users=defState().users;
   normalizeGym();normalizeUsers();
   persist();render();
-  if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}
+  if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});
+    let _refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(_refreshing)return;_refreshing=true;location.reload();});}
   window.addEventListener('load',()=>{initCloud();if(cloudOn()){refreshAuth().then(()=>cloudPull(true)).then(()=>{render();cloudSubscribe();});
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cloudOn())cloudPull().then(()=>render());});
     window.addEventListener('focus',()=>{if(cloudOn())cloudPull().then(()=>render());});}});
