@@ -136,6 +136,10 @@
   .pk-card{display:flex;align-items:center;gap:14px;padding:15px;background:var(--panel);border:1px solid var(--line);border-radius:16px;cursor:pointer}
   .pk-card:active{background:var(--panel2)}
   .pk-card .chev{color:var(--muted);font-size:20px}
+  .pk-card .rank{font-family:var(--mono);font-size:12px;font-weight:700;min-width:26px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:4px 2px}
+  .pk-card .medal{flex-shrink:0}
+  .acc.gym{border-color:rgba(139,124,240,.35);cursor:pointer}
+  .acc.gym .acc-chev{transform:none}
   .pk-name{font-size:17px;font-weight:600}
   .pk-sub{font-size:11px;color:var(--muted)}
   .avatar{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;font-size:22px;font-weight:700;border:1.5px solid;flex-shrink:0}
@@ -154,7 +158,7 @@
   .rolog{margin-left:auto;color:var(--violet);font-weight:600;cursor:pointer;text-decoration:underline}
   @keyframes wcin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
   .overlay{position:fixed;inset:0;background:rgba(10,11,16,.74);z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:calc(env(safe-area-inset-top) + 54px) 16px 16px}
-  .sheet{background:var(--panel);border:1px solid var(--line);border-radius:18px;width:100%;max-width:420px;padding:20px;box-shadow:0 24px 64px rgba(0,0,0,.55);animation:wcin .25s ease}
+  .sheet{background:var(--panel);border:1px solid var(--line);border-radius:18px;width:100%;max-width:420px;padding:20px;box-shadow:0 24px 64px rgba(0,0,0,.55);animation:wcin .25s ease;max-height:calc(100vh - 90px);overflow-y:auto;-webkit-overflow-scrolling:touch}
   .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .pcell{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 8px;text-align:center}
   .pcell .pv{font-size:17px;font-weight:700}
@@ -317,6 +321,12 @@ const BADGES=[
 ];
 const BOOK_BONUS=40;
 const STIERS=[{name:'Bronze',at:250,c:'var(--bronze)'},{name:'Silver',at:750,c:'var(--silver)'},{name:'Gold',at:1800,c:'var(--goldt)'},{name:'Platinum',at:4000,c:'var(--plat)'},{name:'Diamond',at:8000,c:'var(--diamond)'}];
+const TIERS=[{key:'core',xp:50,max:1,label:'Core'},{key:'important',xp:40,max:2,label:'Important'},{key:'secondary',xp:20,max:3,label:'Secondary'},{key:'little',xp:10,max:Infinity,label:'Little'}];
+function tierOf(xp){return xp>=50?TIERS[0]:xp>=40?TIERS[1]:xp>=20?TIERS[2]:TIERS[3];}
+function tierCap(daily,key,exceptI){return daily.filter((t,j)=>j!==exceptI&&tierOf(t.xp).key===key).length;}
+function tierMigrate(u){if(!u||!u.daily)return;(u.weeklyDefs||[]).forEach(w=>{if(w.xp>50)w.xp=50;});if(u.tiered)return;
+  const order=[...u.daily].sort((a,b)=>(b.xp||0)-(a.xp||0));let c=0,i=0,s=0;
+  order.forEach(t=>{if(c<1){t.xp=50;c++;}else if(i<2){t.xp=40;i++;}else if(s<3){t.xp=20;s++;}else t.xp=10;});u.tiered=true;}
 const MTIERS=[{name:'Bronze',at:3000,c:'var(--bronze)'},{name:'Silver',at:12000,c:'var(--silver)'},{name:'Gold',at:35000,c:'var(--goldt)'},{name:'Platinum',at:90000,c:'var(--plat)'},{name:'Diamond',at:220000,c:'var(--diamond)'}];
 const MUSCLES=[
  {id:'chest',name:'Chest'},{id:'back',name:'Back'},{id:'shoulders',name:'Shoulders'},
@@ -541,8 +551,10 @@ function defGym(){
   const C2={name:'Cardio 2 · Intervals',ex:[{id:'ci1',name:'Intervals (bike / row / run)',mus:[],scheme:'10–15 min',cue:'Hard/easy intervals; or 30 min steady if short on time'}]};
   return {ver:GYM_VER,sel:0,view:'log',days:[D1,D2,D3,D4,D5,C1,C2]};
 }
-function defUser(name,color){return{name,color,created:dstr(),completions:0,
+function defUser(name,color){return{name,color,created:dstr(),completions:0,tiered:false,
   daily:DAILY_DEFAULT.map(d=>Object.assign({},d)),
+  weeklyDefs:WEEKLY.map(w=>Object.assign({},w)),
+  areaLabels:{markets:'Markets',health:'Health',knowledge:'Knowledge',business:'Business',productivity:'Productivity',consistency:'Consistency'},
   dailyGoal:150,weeklyGoal:150,totalXP:0,cleared:[],badges:{},today:freshDay(dstr()),
   history:{},weekly:{},areaXP:{markets:0,health:0,knowledge:0,business:0,productivity:0},
   books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{}};}
@@ -558,9 +570,12 @@ function normalizeGym(){if(!S.gym||S.gym.ver!==GYM_VER){const keep=S.gym||{};S.g
   if(S.gym.view===undefined)S.gym.view='log';
   (S.gym.days||[]).forEach(d=>d.ex.forEach(e=>{if(!Array.isArray(e.mus))e.mus=guessMus(e.name);}));}
 function normalizeUsers(){const defs=defState().users;for(const id in defs)if(!S.users[id])S.users[id]=defs[id];
-  const du=defUser('x','#fff');for(const id in S.users){const u=S.users[id];
+  for(const id in S.users){const u=S.users[id];const du=defUser('x','#fff');
   for(const k in du)if(u[k]===undefined)u[k]=du[k];
-  if(!u.today||u.today.date!==dstr())u.today=freshDay(dstr());}}
+  if(!u.areaLabels)u.areaLabels=du.areaLabels;
+  if(!u.weeklyDefs||!u.weeklyDefs.length)u.weeklyDefs=WEEKLY.map(w=>Object.assign({},w));
+  if(!u.today||u.today.date!==dstr())u.today=freshDay(dstr());
+  tierMigrate(u);}}
 function fromV3(o){const s=defState(),m=s.users.matt;
   ['dailyGoal','weeklyGoal','totalXP','cleared','badges','today','history','weekly','areaXP','books','grocery','shutdownLog','notes','calc'].forEach(k=>{if(o[k]!==undefined)m[k]=o[k];});
   if(o.gym){s.gym={sel:o.gym.sel||0,view:o.gym.view||'log',days:o.gym.days||defGym().days};m.gymSessions=o.gym.sessions||{};}
@@ -574,7 +589,7 @@ function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 /* ================= XP / progress ================= */
 function dailyXP(){let x=0;for(const t of U().daily)if(U().today.done[t.id])x+=t.xp;for(const q of U().today.side)if(q.done)x+=q.xp;return x;}
 function weekCounts(){const k=weekKey();return (U().weekly[k]&&U().weekly[k].counts)||{};}
-function weeklyXP(){const c=weekCounts();let x=0;for(const q of WEEKLY)x+=Math.min(c[q.id]||0,q.target)*q.xp;return x;}
+function weeklyXP(){const c=weekCounts();let x=0;for(const q of U().weeklyDefs)x+=Math.min(c[q.id]||0,q.target)*q.xp;return x;}
 function addArea(a,n){if(a&&a!=='consistency')U().areaXP[a]=(U().areaXP[a]||0)+n;}
 function areaValue(id){return id==='consistency'?U().cleared.length*60:Math.max(0,U().areaXP[id]||0);}
 
@@ -597,7 +612,7 @@ function checkProgress(){
 /* ================= actions ================= */
 function toggleDaily(id){if(!editGuard())return;const t=U().daily.find(c=>c.id===id),d=!U().today.done[id];
   U().today.done[id]=d;U().totalXP+=d?t.xp:-t.xp;addArea(t.area,d?t.xp:-t.xp);U().completions=Math.max(0,(U().completions||0)+(d?1:-1));checkProgress();persist();render();}
-function bumpWeekly(id,dir){if(!editGuard())return;const q=WEEKLY.find(w=>w.id===id),k=weekKey();
+function bumpWeekly(id,dir){if(!editGuard())return;const q=U().weeklyDefs.find(w=>w.id===id);if(!q)return;const k=weekKey();
   U().weekly[k]=U().weekly[k]||{counts:{}};const cur=U().weekly[k].counts[id]||0,nx=Math.max(0,cur+dir);
   if(nx===cur)return;U().weekly[k].counts[id]=nx;
   const delta=(Math.min(nx,q.target)-Math.min(cur,q.target))*q.xp;
@@ -617,14 +632,19 @@ function render(){
   if(route.name==='gym')return renderGym(app);
   if(route.name==='task')return renderTask(app,route.id);
   if(route.name==='editcore')return renderEditCore(app);
+  if(route.name==='editweekly')return renderEditWeekly(app);
+  if(route.name==='editstats')return renderEditStats(app);
   renderMain(app);
 }
 function renderPicker(app){
+  const medal=['#F2C14E','#C9CDD6','#CD7F42'];const mlab=['1','2','3'];
+  const ranked=Object.entries(S.users).sort((a,b)=>(b[1].totalXP||0)-(a[1].totalXP||0));
   app.innerHTML=`<div class="picker"><div class="pk-title mono">Who are you?</div>
-    <div class="pk-grid">${Object.entries(S.users).map(([id,u])=>`<div class="pk-card" data-pick="${id}">
+    <div class="pk-grid">${ranked.map(([id,u],r)=>`<div class="pk-card" data-pick="${id}">
+      <div class="rank" style="${r<3?'color:'+medal[r]+';border-color:'+medal[r]+'44':'color:var(--muted)'}">${r<3?'#'+mlab[r]:'#'+(r+1)}</div>
       <div class="avatar" style="background:${u.color}22;color:${u.color};border-color:${u.color}">${u.name[0]}</div>
-      <div style="flex:1"><div class="pk-name">${u.name}</div><div class="pk-sub mono">Lv ${levelOf(u.totalXP).lvl} · ${u.cleared.length}d cleared</div></div>
-      <span class="chev">›</span></div>`).join('')}</div></div>`;
+      <div style="flex:1"><div class="pk-name">${u.name}</div><div class="pk-sub mono">Lv ${levelOf(u.totalXP).lvl} · ${(u.totalXP||0).toLocaleString()} XP</div></div>
+      ${r<3?`<span class="medal" style="color:${medal[r]}">${svg(P.trophy,'class="ico" style="width:17px;height:17px"')}</span>`:'<span class="chev">›</span>'}</div>`).join('')}</div></div>`;
   app.querySelectorAll('[data-pick]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.pick));
 }
 function renderWelcome(app){
@@ -635,26 +655,68 @@ function renderEditCore(app){
   const u=U();
   app.innerHTML=`<div class="back" id="back">${svg(P.arrow,'class="ico"')} Back</div>
     <div class="dtitle">Edit ${u.name}’s core</div>
-    <div class="dsub">Rename, set XP, choose area & icon, or remove. These are ${u.name}’s daily goals.</div>${roBanner()}
+    <div class="dsub">Set each task's tier — <b>Core</b> 50 (×1), <b>Important</b> 40 (×2), <b>Secondary</b> 20 (×3), <b>Little</b> 10 (∞).</div>${roBanner()}
     ${u.daily.map((t,i)=>`<div class="panel card" style="padding:12px">
       <input class="ec-nm" data-i="${i}" value="${escapeHtml(t.name)}" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-size:14.5px;outline:none;margin-bottom:8px"/>
       <div style="display:flex;gap:8px;align-items:center">
-        <input class="ec-xp" data-i="${i}" inputmode="numeric" value="${t.xp}" style="width:58px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--gold);font-family:var(--mono);text-align:center;outline:none"/>
-        <select class="ec-area" data-i="${i}" style="flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12px;padding:9px;outline:none">${AREAS.filter(a=>a.id!=='consistency').map(a=>`<option value="${a.id}" ${t.area===a.id?'selected':''}>${a.name}</option>`).join('')}</select>
+        <select class="ec-tier" data-i="${i}" style="width:118px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--gold);font-family:var(--mono);font-size:11px;padding:9px;outline:none">${TIERS.map(T=>`<option value="${T.key}" ${tierOf(t.xp).key===T.key?'selected':''}>${T.label} · ${T.xp}</option>`).join('')}</select>
+        <select class="ec-area" data-i="${i}" style="flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12px;padding:9px;outline:none">${AREAS.filter(a=>a.id!=='consistency').map(a=>`<option value="${a.id}" ${t.area===a.id?'selected':''}>${escapeHtml(u.areaLabels[a.id]||a.name)}</option>`).join('')}</select>
         <select class="ec-ic" data-i="${i}" style="background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12px;padding:9px;outline:none">${ICONS.map(ic=>`<option value="${ic}" ${t.ic===ic?'selected':''}>${ic}</option>`).join('')}</select>
         <span class="del" data-ecdel="${i}">${svg(P.x)}</span></div></div>`).join('')}
-    <div class="panel card"><div class="mono" style="font-size:10px;color:var(--muted);margin-bottom:8px">Add task</div>
-      <div class="addbar"><input id="ec_new" placeholder="New daily task…"/><input id="ec_newxp" inputmode="numeric" value="25" style="max-width:60px;text-align:center"/>
+    <div class="panel card"><div class="mono" style="font-size:10px;color:var(--muted);margin-bottom:8px">Add task (starts as Little · 10)</div>
+      <div class="addbar"><input id="ec_new" placeholder="New daily task…"/>
         <button id="ec_add">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div></div>`;
   app.querySelector('#back').onclick=()=>go({name:'home'});wireRoBanner(app);
   app.querySelectorAll('.ec-nm').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].name=e.value;persist();});
-  app.querySelectorAll('.ec-xp').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].xp=Math.max(0,Math.round(cnum(e.value)));persist();});
+  app.querySelectorAll('.ec-tier').forEach(e=>e.onchange=()=>{if(!editGuard())return;const i=+e.dataset.i,key=e.value,T=TIERS.find(x=>x.key===key);
+    if(T.max!==Infinity&&tierCap(u.daily,key,i)>=T.max){toast('You can only give '+T.xp+' XP to '+T.max+' task'+(T.max>1?'s':''));render();return;}
+    u.daily[i].xp=T.xp;persist();render();});
   app.querySelectorAll('.ec-area').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].area=e.value;persist();});
   app.querySelectorAll('.ec-ic').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].ic=e.value;persist();});
   app.querySelectorAll('[data-ecdel]').forEach(e=>e.onclick=()=>{if(!editGuard())return;u.daily.splice(+e.dataset.ecdel,1);persist();render();});
-  const add=()=>{const nm=app.querySelector('#ec_new').value.trim();if(!nm)return;const xp=Math.max(0,Math.round(cnum(app.querySelector('#ec_newxp').value)))||25;
-    if(!editGuard())return;u.daily.push({id:'d'+Date.now(),name:nm,xp,cad:'daily',ic:'zap',area:'productivity',coreDaily:true});persist();render();};
+  const add=()=>{const nm=app.querySelector('#ec_new').value.trim();if(!nm)return;if(!editGuard())return;
+    u.daily.push({id:'d'+Date.now(),name:nm,xp:10,cad:'daily',ic:'zap',area:'productivity',coreDaily:true});persist();render();};
   app.querySelector('#ec_add').onclick=add;app.querySelector('#ec_new').onkeydown=e=>{if(e.key==='Enter')add();};
+}
+function renderEditWeekly(app){
+  const u=U();
+  app.innerHTML=`<div class="back" id="back">${svg(P.arrow,'class="ico"')} Back</div>
+    <div class="dtitle">Edit ${u.name}’s weekly quests</div>
+    <div class="dsub">Name, XP per completion (max 50), times per week, area & icon.</div>${roBanner()}
+    ${u.weeklyDefs.map((t,i)=>`<div class="panel card" style="padding:12px">
+      <input class="ew-nm" data-i="${i}" value="${escapeHtml(t.name)}" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-size:14.5px;outline:none;margin-bottom:8px"/>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="ew-xp" data-i="${i}" inputmode="numeric" value="${t.xp}" title="XP" style="width:52px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--gold);font-family:var(--mono);text-align:center;outline:none"/>
+        <input class="ew-tg" data-i="${i}" inputmode="numeric" value="${t.target}" title="× / week" style="width:52px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-family:var(--mono);text-align:center;outline:none"/>
+        <select class="ew-area" data-i="${i}" style="flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12px;padding:9px;outline:none">${AREAS.filter(a=>a.id!=='consistency').map(a=>`<option value="${a.id}" ${t.area===a.id?'selected':''}>${escapeHtml(u.areaLabels[a.id]||a.name)}</option>`).join('')}</select>
+        <select class="ew-ic" data-i="${i}" style="background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12px;padding:9px;outline:none">${ICONS.map(ic=>`<option value="${ic}" ${t.ic===ic?'selected':''}>${ic}</option>`).join('')}</select>
+        <span class="del" data-ewdel="${i}">${svg(P.x)}</span></div></div>`).join('')}
+    <div class="panel card"><div class="mono" style="font-size:10px;color:var(--muted);margin-bottom:8px">Add weekly quest</div>
+      <div class="addbar"><input id="ew_new" placeholder="New weekly quest…"/><input id="ew_newtg" inputmode="numeric" value="3" title="×/week" style="max-width:48px;text-align:center"/>
+        <button id="ew_add">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div></div>`;
+  app.querySelector('#back').onclick=()=>go({name:'home'});wireRoBanner(app);
+  const cap=v=>Math.max(0,Math.min(50,Math.round(cnum(v))));
+  app.querySelectorAll('.ew-nm').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.weeklyDefs[+e.dataset.i].name=e.value;persist();});
+  app.querySelectorAll('.ew-xp').forEach(e=>e.onchange=()=>{if(!editGuard())return;const v=cap(e.value);u.weeklyDefs[+e.dataset.i].xp=v;e.value=v;persist();});
+  app.querySelectorAll('.ew-tg').forEach(e=>e.onchange=()=>{if(!editGuard())return;const v=Math.max(1,Math.round(cnum(e.value)))||1;u.weeklyDefs[+e.dataset.i].target=v;u.weeklyDefs[+e.dataset.i].cad=v+'× / week';e.value=v;persist();});
+  app.querySelectorAll('.ew-area').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.weeklyDefs[+e.dataset.i].area=e.value;persist();});
+  app.querySelectorAll('.ew-ic').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.weeklyDefs[+e.dataset.i].ic=e.value;persist();});
+  app.querySelectorAll('[data-ewdel]').forEach(e=>e.onclick=()=>{if(!editGuard())return;u.weeklyDefs.splice(+e.dataset.ewdel,1);persist();render();});
+  const add=()=>{const nm=app.querySelector('#ew_new').value.trim();if(!nm)return;if(!editGuard())return;const tg=Math.max(1,Math.round(cnum(app.querySelector('#ew_newtg').value)))||1;
+    u.weeklyDefs.push({id:'w'+Date.now(),name:nm,xp:25,target:tg,cad:tg+'× / week',ic:'zap',area:'productivity'});persist();render();};
+  app.querySelector('#ew_add').onclick=add;app.querySelector('#ew_new').onkeydown=e=>{if(e.key==='Enter')add();};
+}
+function renderEditStats(app){
+  const u=U();
+  app.innerHTML=`<div class="back" id="back">${svg(P.arrow,'class="ico"')} Back</div>
+    <div class="dtitle">Edit ${u.name}’s stats</div>
+    <div class="dsub">Rename your radar axes to match your own goals. Tasks feed the axis you assign them.</div>${roBanner()}
+    <div class="panel card">${AREAS.map(a=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)">
+      <span style="width:14px;height:14px;border-radius:4px;background:var(${a.v});flex-shrink:0"></span>
+      <input class="es-nm" data-id="${a.id}" value="${escapeHtml(u.areaLabels[a.id]||a.name)}" ${a.id==='consistency'?'disabled':''} style="flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-size:14px;outline:none"/></div>`).join('')}
+      <div class="hint" style="margin-top:10px">Consistency is fixed (it tracks days cleared).</div></div>`;
+  app.querySelector('#back').onclick=()=>go({name:'home'});wireRoBanner(app);
+  app.querySelectorAll('.es-nm').forEach(e=>e.onchange=()=>{if(!editGuard())return;const v=e.value.trim()||AREAS.find(a=>a.id===e.dataset.id).name;u.areaLabels[e.dataset.id]=v;persist();});
 }
 function profileModalHTML(){
   const u=U(),lv=levelOf(u.totalXP),streak=streakOf(u.cleared),inp=u.calc.inputs||{},rep=u.calc.report;
@@ -737,8 +799,8 @@ function homePaneHTML(){
   </div>
   <div class="seclabel"><span>Core · daily</span><span class="edit" data-editcore>✎ edit</span></div>
   <div class="panel list">${U().daily.map(t=>rowHTML(t,!!U().today.done[t.id])).join('')}</div>
-  <div class="seclabel"><span>Weekly quests</span><span class="r">${wxp} / ${U().weeklyGoal} xp</span></div>
-  <div class="panel list">${WEEKLY.map(q=>weeklyRow(q,wc[q.id]||0)).join('')}</div>
+  <div class="seclabel"><span>Weekly quests</span><span class="edit" data-editweekly>✎ edit</span></div>
+  <div class="panel list">${U().weeklyDefs.map(q=>weeklyRow(q,wc[q.id]||0)).join('')}</div>
   <div class="seclabel"><span>Side quests · one-offs</span></div>
   <div class="panel sq">
     ${U().today.side.map(q=>`<div class="sqrow${q.done?' done':''}">
@@ -749,7 +811,7 @@ function homePaneHTML(){
       <select id="sqsize"><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option></select>
       <button id="sqadd">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div>
   </div>
-  <div class="seclabel"><span>Stats · ranks</span></div>
+  <div class="seclabel"><span>Stats · ranks</span><span class="edit" data-editstats>✎ edit</span></div>
   <div class="panel radar">${radarSVG()}
     <div class="tierkey">${STIERS.map(t=>`<span><i style="background:${t.c}"></i>${t.name}</span>`).join('')}</div></div>
   <div class="seclabel"><span>This week</span><span class="r">${wpct}%</span></div>
@@ -776,6 +838,8 @@ function wireHome(root){
   root.querySelector('#sqadd').onclick=sqadd;
   root.querySelector('#sqname').onkeydown=e=>{if(e.key==='Enter')sqadd();};
   const ec=root.querySelector('[data-editcore]');if(ec)ec.onclick=()=>go({name:'editcore'});
+  const ew=root.querySelector('[data-editweekly]');if(ew)ew.onclick=()=>go({name:'editweekly'});
+  const es=root.querySelector('[data-editstats]');if(es)es.onclick=()=>go({name:'editstats'});
   root.querySelectorAll('[data-badge]').forEach(e=>e.onclick=()=>{const b=BADGES.find(x=>x.id===e.dataset.badge);toast(b.name+' — '+b.desc);});
 }
 function rowHTML(t,done){
@@ -794,7 +858,9 @@ function weeklyRow(q,n){const full=n>=q.target;
 
 /* ================= health pane ================= */
 function healthPaneHTML(){
-  return `${groceryPopupHTML()}
+  return `<div class="acc gym" data-gymopen><div class="acc-h"><div class="acc-tt"><div class="acc-title">${svg(P.dumbbell,'class="ico" style="width:15px;height:15px;color:var(--violet);vertical-align:-2px"')} Gym tracker</div>
+    <div class="acc-sum">tap to open your workout & body map</div></div><span class="acc-chev" style="transform:none">›</span></div></div>
+  ${groceryPopupHTML()}
   <div class="seclabel"><span>Health · reference</span></div>
   ${HEALTH.map(sec=>{
     const count=sec.subs?sec.subs.reduce((n,s)=>n+s.items.length,0):sec.items.length;
@@ -816,6 +882,7 @@ function groceryInner(){return `${U().grocery.map(g=>`<div class="item"><div cla
   <div class="addbar" style="margin-top:12px"><input id="groname" placeholder="Add item…"/><button id="groadd">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div>
   ${U().grocery.some(g=>g.checked)?'<button class="btn ghost" id="groclear" style="margin-top:10px">Clear checked</button>':''}`;}
 function wireHealth(root){
+  const gl=root.querySelector('[data-gymopen]');if(gl)gl.onclick=()=>go({name:'gym'});
   root.querySelectorAll('[data-acc]').forEach(h=>h.onclick=e=>{e.stopPropagation();h.closest('.acc').classList.toggle('open');});
   wireGro(root);
 }
@@ -846,7 +913,7 @@ function radarSVG(){
   const poly=AREAS.map((a,i)=>{const r=R*ris[i].radiusFrac;return pt(i,r).map(v=>v.toFixed(1)).join(',');}).join(' ');
   const dots=AREAS.map((a,i)=>{const r=R*ris[i].radiusFrac,p=pt(i,r);return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="${ris[i].color}"/>`;}).join('');
   let labels='';AREAS.forEach((a,i)=>{const p=pt(i,R+15),x=p[0],y=p[1];const anc=Math.abs(x-cx)<10?'middle':(x>cx?'start':'end');
-    labels+=`<text x="${x.toFixed(1)}" y="${(y-3).toFixed(1)}" fill="var(${a.v})" font-size="9" font-family="ui-monospace,monospace" letter-spacing="1" text-anchor="${anc}">${a.name.toUpperCase()}</text>`;
+    labels+=`<text x="${x.toFixed(1)}" y="${(y-3).toFixed(1)}" fill="var(${a.v})" font-size="9" font-family="ui-monospace,monospace" letter-spacing="1" text-anchor="${anc}">${(U().areaLabels[a.id]||a.name).toUpperCase()}</text>`;
     labels+=`<text x="${x.toFixed(1)}" y="${(y+8).toFixed(1)}" fill="${ris[i].color}" font-size="8" font-family="ui-monospace,monospace" text-anchor="${anc}">${ris[i].name==='—'?'unranked':ris[i].name}</text>`;});
   return `<svg viewBox="-46 -8 412 316" xmlns="http://www.w3.org/2000/svg">${grid}${axes}
     <polygon points="${poly}" fill="rgba(242,177,76,.14)" stroke="var(--gold)" stroke-width="1.5"/>${dots}${labels}</svg>`;
@@ -859,7 +926,7 @@ function weekBars(){const dates=weekDates(),t=dstr();const vals=dates.map(d=>U()
 
 /* ================= task detail ================= */
 function renderTask(app,id){
-  const t=U().daily.find(x=>x.id===id)||WEEKLY.find(x=>x.id===id);if(!t)return go({name:'home'});
+  const t=U().daily.find(x=>x.id===id)||U().weeklyDefs.find(x=>x.id===id);if(!t)return go({name:'home'});
   const done=!!U().today.done[id];
   let body='';
   if(t.detail==='books')body=booksHTML();
@@ -1126,7 +1193,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v13 · +Frost';
+const APP_VERSION='v14 · tiers-weekly-stats';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app'}};
