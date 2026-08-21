@@ -78,6 +78,26 @@
   .microgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
   .mgcell{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)}
   .mgcell span{color:var(--muted)}
+  .mealpick{display:flex;gap:6px;margin-top:10px}
+  .mealopt{flex:1;padding:8px 4px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:11.5px;cursor:pointer}
+  .mealopt.on{border-color:var(--gold);color:var(--gold)}
+  .mealhd{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:600;color:var(--muted);margin:6px 4px 6px}
+  .kchart{position:relative;display:flex;align-items:flex-end;gap:7px;height:120px;padding-top:6px}
+  .kbar{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end}
+  .kbwrap{width:100%;flex:1;display:flex;align-items:flex-end}
+  .kbfill{width:100%;background:var(--gold);border-radius:4px 4px 0 0;min-height:2px;transition:height .3s}
+  .kbfill.over{background:#e06c75}
+  .kbar.today .kbl{color:var(--gold)}
+  .kbl{font-size:9px;color:var(--muted);margin-top:4px;font-family:var(--mono)}
+  .kredline{position:absolute;left:0;right:0;height:0;border-top:1.5px dashed #e06c75;opacity:.8;z-index:2}
+  .waterbtns{display:flex;gap:8px;align-items:center;margin-top:10px}
+  .waterbtns button{padding:8px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:12.5px;cursor:pointer}
+  .waterbtns .hint{margin-left:auto}
+  .wmodes{display:flex;gap:6px;margin:12px 0 6px}
+  .wmode{flex:1;padding:7px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:12px;cursor:pointer}
+  .wmode.on{border-color:var(--gold);color:var(--gold)}
+  .wgraph{width:100%;height:auto;display:block}
+  .wstats{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:6px}
   .scanstat{margin:12px 0 8px;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px}
   .spin{width:30px;height:30px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--gold);animation:qspin .8s linear infinite}
   @keyframes qspin{to{transform:rotate(360deg)}}
@@ -595,7 +615,7 @@ function defUser(name,color){return{name,color,created:dstr(),completions:0,tier
   areaLabels:{markets:'Markets',health:'Health',knowledge:'Knowledge',business:'Business',productivity:'Productivity',consistency:'Consistency'},
   dailyGoal:150,weeklyGoal:150,totalXP:0,cleared:[],badges:{},today:freshDay(dstr()),
   history:{},weekly:{},areaXP:{markets:0,health:0,knowledge:0,business:0,productivity:0},
-  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{},food:{}};}
+  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{},food:{},water:{},weight:{}};}
 function defState(){return{currentUser:null,
   users:{matt:defUser('Matt','#F2B14C'),jerry:defUser('Jerry','#5AA9E6'),alexio:defUser('Alexio','#56C596'),d4:defUser('D4','#E8618C'),Frost:defUser('Frost','#67E8F9'),george:defUser('George','#B58CFF')},
   gym:defGym()};}
@@ -664,15 +684,23 @@ function go(r){route=r;window.scrollTo(0,0);render();}
 /* ================= render root ================= */
 function render(){
   const app=document.getElementById('app');
-  if(!S.currentUser)return renderPicker(app);
-  if(loginFor)return renderLogin(app,loginFor);
-  if(showWelcome)return renderWelcome(app);
-  if(route.name==='gym')return renderGym(app);
-  if(route.name==='task')return renderTask(app,route.id);
-  if(route.name==='editcore')return renderEditCore(app);
-  if(route.name==='editweekly')return renderEditWeekly(app);
-  if(route.name==='editstats')return renderEditStats(app);
-  renderMain(app);
+  const saves=[];try{app.querySelectorAll('.pane').forEach(p=>{if(p.scrollTop)saves.push(['#'+p.id,p.scrollTop]);});}catch(e){}
+  const pgEl=app.querySelector('#pager');const pgLeft=pgEl?pgEl.scrollLeft:null;
+  const winY=(typeof window!=='undefined'&&window.scrollY)||0;
+  if(!S.currentUser)renderPicker(app);
+  else if(loginFor)renderLogin(app,loginFor);
+  else if(showWelcome)renderWelcome(app);
+  else if(route.name==='gym')renderGym(app);
+  else if(route.name==='task')renderTask(app,route.id);
+  else if(route.name==='editcore')renderEditCore(app);
+  else if(route.name==='editweekly')renderEditWeekly(app);
+  else if(route.name==='editstats')renderEditStats(app);
+  else renderMain(app);
+  requestAnimationFrame(()=>{try{
+    saves.forEach(([sel,top])=>{const el=app.querySelector(sel);if(el)el.scrollTop=top;});
+    const pg=app.querySelector('#pager');if(pg&&pgLeft!=null)pg.scrollLeft=pgLeft;
+    if(winY&&typeof window!=='undefined')window.scrollTo(0,winY);
+  }catch(e){}});
 }
 function renderPicker(app){
   const medal=['#F2C14E','#C9CDD6','#CD7F42'];const mlab=['1','2','3'];
@@ -778,7 +806,9 @@ function sizePager(){const pg=document.getElementById('pager');if(!pg)return;
   const top=pg.getBoundingClientRect().top;const h=Math.max(240,window.innerHeight-top-16);pg.style.height=h+'px';}
 
 /* ================= food tracker (Open Food Facts) ================= */
-let foodResults=[], foodPending=null, foodBusy=false, foodMsg='', foodQ='', foodBCopen=false;
+let foodResults=[], foodPending=null, foodBusy=false, foodMsg='', foodQ='', foodBCopen=false, foodMeal=null, weightMode='D';
+const MEALS=[['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snacks','Snacks']];
+function defaultMeal(){const h=new Date().getHours();return h<11?'breakfast':h<15?'lunch':h<18?'snacks':h<22?'dinner':'snacks';}
 const MICROS=[['sodium','Sodium','mg'],['potassium','Potassium','mg'],['calcium','Calcium','mg'],['iron','Iron','mg'],['magnesium','Magnesium','mg'],['zinc','Zinc','mg'],['phosphorus','Phosphorus','mg'],['vitc','Vitamin C','mg'],['vita','Vitamin A','µg'],['vitd','Vitamin D','µg'],['vitb6','Vitamin B6','mg'],['vitb12','Vitamin B12','µg'],['cholesterol','Cholesterol','mg']];
 function foodNum(v){v=parseFloat(v);return isFinite(v)?v:0;}
 function foodDay(d){return (U().food&&U().food[d||dstr()])||[];}
@@ -819,10 +849,17 @@ async function offSearch(q){const j=await foodApi({q});return (j.products||[]).m
 async function offBarcode(code){const j=await foodApi({barcode:String(code).replace(/\D/g,'')});
   const p=j&&j.product;if(!p||!(p.product_name||p.product_name_en||p.nutriments))return null;return mapOff(p);}
 function servingGrams(item){const m=(item.serving||'').match(/([\d.]+)\s*g/);return m?Math.round(parseFloat(m[1]))||100:100;}
-function addFood(item,grams){if(!editGuard())return;const d=dstr();U().food=U().food||{};U().food[d]=U().food[d]||[];
-  U().food[d].push({id:'f'+Date.now(),name:item.name,brand:item.brand,grams:Math.max(1,Math.round(grams))||100,n:item.n});
+function addFood(item,grams,meal){if(!editGuard())return;const d=dstr();U().food=U().food||{};U().food[d]=U().food[d]||[];
+  U().food[d].push({id:'f'+Date.now(),name:item.name,brand:item.brand,grams:Math.max(1,Math.round(grams))||100,n:item.n,meal:meal||foodMeal||defaultMeal()});
   foodPending=null;foodResults=[];foodQ='';foodMsg='';persist();render();}
 function removeFood(id){if(!editGuard())return;const d=dstr();U().food[d]=(U().food[d]||[]).filter(e=>e.id!==id);persist();render();}
+function addWater(ml){if(!editGuard())return;U().water=U().water||{};const d=dstr();U().water[d]=Math.max(0,Math.round((U().water[d]||0)+ml));persist();render();}
+function logWeight(kg){if(!editGuard())return;kg=Math.round(cnum(kg)*10)/10;if(!kg){toast('Enter a weight');return;}U().weight=U().weight||{};U().weight[dstr()]=kg;persist();render();}
+function weekKeyOf(ds){const dt=new Date(ds+'T00:00:00');const off=(dt.getDay()+6)%7;dt.setDate(dt.getDate()-off);return dt.toISOString().slice(0,10);}
+function weightSeries(mode){const w=U().weight||{};const es=Object.keys(w).sort().map(x=>[x,w[x]]);if(!es.length)return [];
+  if(mode==='D')return es.slice(-30).map(([x,v])=>({x,v}));
+  const g={};es.forEach(([x,v])=>{const k=mode==='W'?weekKeyOf(x):x.slice(0,7);(g[k]=g[k]||[]).push(v);});
+  return Object.keys(g).sort().slice(-14).map(k=>({x:k,v:g[k].reduce((a,b)=>a+b,0)/g[k].length}));}
 function macroBar(label,val,tgt,color){const pct=tgt?Math.min(100,Math.round(val/tgt*100)):0;
   return `<div class="mb"><div class="mb-top"><span>${label}</span><span class="mono">${val}${tgt?' / '+tgt:''} g</span></div>
     <div class="mb-track"><div class="mb-fill" style="width:${pct}%;background:${color}"></div></div></div>`;}
@@ -834,17 +871,36 @@ function foodEntryHTML(e){const f=e.grams/100;
   return `<div class="row foodentry"><div class="rbody"><div class="fr-nm">${escapeHtml(e.name)}${e.brand?` <span class="hint">· ${escapeHtml(e.brand)}</span>`:''}</div>
     <div class="fr-sub mono">${e.grams}g · ${Math.round(e.n.kcal*f)} kcal · P${Math.round(e.n.protein*f)} C${Math.round(e.n.carbs*f)} F${Math.round(e.n.fat*f)}</div></div>
     <span class="del" data-fdel="${e.id}">${svg(P.x)}</span></div>`;}
-function foodAddModalHTML(){const it=foodPending,g=servingGrams(it);
+function foodAddModalHTML(){const it=foodPending,g=servingGrams(it);const sel=foodMeal||defaultMeal();
   return `<div class="overlay" id="fov"><div class="sheet" style="max-width:360px">
     <div class="dtitle" style="font-size:18px">${escapeHtml(it.name)}</div>
     <div class="dsub">${it.brand?escapeHtml(it.brand)+' · ':''}${Math.round(it.n.kcal)} kcal/100g · P${Math.round(it.n.protein)} C${Math.round(it.n.carbs)} F${Math.round(it.n.fat)}</div>
-    <div class="addbar" style="margin-top:6px"><input id="fgrams" inputmode="numeric" value="${g}" style="max-width:90px;text-align:center"/><span class="hint" style="align-self:center">grams</span></div>
+    <div class="mealpick">${MEALS.map(([k,lab])=>`<button class="mealopt${sel===k?' on':''}" data-meal="${k}">${lab}</button>`).join('')}</div>
+    <div class="addbar" style="margin-top:10px"><input id="fgrams" inputmode="numeric" value="${g}" style="max-width:90px;text-align:center"/><span class="hint" style="align-self:center">grams</span></div>
     <div style="display:flex;gap:8px;margin-top:14px"><button class="btn ghost" id="fcancel" style="flex:1">Cancel</button><button class="btn" id="fadd" style="flex:1">Add</button></div>
   </div></div>`;}
 function microsHTML(t){const items=MICROS.filter(m=>t[m[0]]>0.05);if(!items.length)return '';
   return `<div class="acc micros-acc"><div class="acc-h" data-micacc><div class="acc-title small">Vitamins · minerals · electrolytes</div><span class="acc-chev">›</span></div>
     <div class="acc-body"><div class="microgrid">${items.map(m=>`<div class="mgcell"><span>${m[1]}</span><b class="mono">${t[m[0]]>=100?Math.round(t[m[0]]):t[m[0]]} ${m[2]}</b></div>`).join('')}</div>
       <div class="hint" style="margin-top:6px">Only nutrients present in the logged items' data are shown.</div></div></div>`;}
+function weekKcalHTML(){const dates=weekDates();const tg=foodTargets();const vals=dates.map(d=>Math.round(foodTotals(d).kcal));
+  const mx=Math.max(...vals,tg?tg.kcal:0,1);const L=['M','T','W','T','F','S','S'];const today=dstr();
+  const red=tg?`<div class="kredline" style="bottom:${Math.round(tg.kcal/mx*100)}%"></div>`:'';
+  const bars=dates.map((d,i)=>{const h=Math.round(vals[i]/mx*100);const over=tg&&vals[i]>tg.kcal;
+    return `<div class="kbar${d===today?' today':''}"><div class="kbwrap"><div class="kbfill${over?' over':''}" style="height:${h}%"></div></div><div class="kbl">${L[i]}</div></div>`;}).join('');
+  let sum='';if(tg){const wk=tg.kcal*7,con=vals.reduce((a,b)=>a+b,0),diff=wk-con;
+    sum=`<div class="status mono" style="margin-top:10px">${diff>=0?n0(diff)+' kcal left this week':n0(-diff)+' kcal OVER this week'}</div>`;}
+  return `<div class="seclabel"><span>This week · calories</span></div>
+    <div class="panel card"><div class="kchart">${red}${bars}</div>${sum}
+      <div class="hint" style="margin-top:6px">${tg?'Red line = daily limit ('+tg.kcal+' kcal).':'Set a Body Calc report to show your daily limit.'}</div></div>`;}
+function waterHTML(){const ml=(U().water&&U().water[dstr()])||0,goal=2500,pct=Math.min(100,Math.round(ml/goal*100));
+  return `<div class="seclabel"><span>Water</span><span class="r mono">${ml} / ${goal} ml</span></div>
+   <div class="panel card"><div class="mb-track" style="height:9px"><div class="mb-fill" style="width:${pct}%;background:#67E8F9"></div></div>
+    <div class="waterbtns"><button data-water="-250">−250</button><button data-water="250">+250 ml</button><button data-water="500">+500 ml</button><span class="mono hint">${Math.round(ml/250)} glasses</span></div></div>`;}
+function diaryHTML(){const day=foodDay();
+  return MEALS.map(([k,lab])=>{const items=day.filter(e=>(e.meal||'snacks')===k);const sub=items.reduce((s,e)=>s+e.n.kcal*e.grams/100,0);
+    return `<div class="mealhd"><span>${lab}</span><span class="mono">${Math.round(sub)} kcal</span></div>
+      <div class="panel list" style="margin-bottom:12px">${items.length?items.map(foodEntryHTML).join(''):'<div class="hint" style="padding:11px 14px">—</div>'}</div>`;}).join('');}
 function foodPaneHTML(){
   const t=foodTotals(),tg=foodTargets();const kpct=tg?Math.min(100,Math.round(t.kcal/tg.kcal*100)):0;const n=foodDay().length;
   return `<div class="seclabel"><span>Today · food</span><span class="r mono">${n} item${n===1?'':'s'}</span></div>
@@ -857,6 +913,8 @@ function foodPaneHTML(){
     <div class="micros">fiber ${t.fiber}g · sugars ${t.sugars}g · sat.fat ${t.satfat}g · sodium ${Math.round(t.sodium)}mg</div>
     ${tg?'':'<div class="hint" style="margin-top:8px">Fill in Body Calc to see targets & how much you have left.</div>'}</div>
   ${microsHTML(t)}
+  ${weekKcalHTML()}
+  ${waterHTML()}
   <div class="seclabel"><span>Add food</span></div>
   <div class="panel card">
     <div class="foodsearch">
@@ -871,7 +929,7 @@ function foodPaneHTML(){
     <div id="foodResults">${foodResults.map((p,i)=>foodResultHTML(p,i)).join('')}</div>
   </div>
   <div class="seclabel"><span>Diary</span></div>
-  <div class="panel list">${n?foodDay().map(foodEntryHTML).join(''):'<div class="hint" style="padding:14px">No food logged yet today.</div>'}</div>
+  ${diaryHTML()}
   ${foodPending?foodAddModalHTML():''}`;
 }
 function wireFood(root){
@@ -898,9 +956,11 @@ function wireFood(root){
   if(bc)bc.onkeydown=e=>{if(e.key==='Enter')doBC(bc.value);};
   if(sb)sb.onclick=()=>startScan(it=>{foodPending=it;foodMsg='';render();});
   root.querySelectorAll('[data-micacc]').forEach(h=>h.onclick=()=>h.closest('.acc').classList.toggle('open'));
+  root.querySelectorAll('[data-water]').forEach(e=>e.onclick=()=>addWater(+e.dataset.water));
   root.querySelectorAll('[data-fdel]').forEach(e=>e.onclick=()=>removeFood(e.dataset.fdel));
   const fov=root.querySelector('#fov');
-  if(fov){const add=()=>{const g=foodNum(root.querySelector('#fgrams').value)||servingGrams(foodPending);addFood(foodPending,g);};
+  if(fov){root.querySelectorAll('[data-meal]').forEach(e=>e.onclick=()=>{foodMeal=e.dataset.meal;render();});
+    const add=()=>{const g=foodNum(root.querySelector('#fgrams').value)||servingGrams(foodPending);addFood(foodPending,g,foodMeal||defaultMeal());};
     root.querySelector('#fadd').onclick=add;root.querySelector('#fcancel').onclick=()=>{foodPending=null;render();};
     fov.onclick=e=>{if(e.target===fov){foodPending=null;render();}};}
 }
@@ -1355,11 +1415,34 @@ function reportBlockHTML(r){
     <div class="acc-sum">${r.date} · ${goalLabel(r.goal)} · ${n0(r.target)} kcal/day</div></div><span class="acc-chev">›</span></div>
     <div class="acc-body">${comp}${energy}${tgt}${macro}${days}${notes}</div></div>`;
 }
+function weightGraphSVG(){const s=weightSeries(weightMode);
+  if(s.length<1)return '<div class="hint" style="padding:12px 0">Log your weight to start the trend.</div>';
+  const W=300,H=118,pad=10,vals=s.map(p=>p.v);let mn=Math.min(...vals),mx=Math.max(...vals);if(mn===mx){mn-=1;mx+=1;}const rng=mx-mn;
+  const X=i=>s.length<=1?W/2:pad+i*(W-2*pad)/(s.length-1),Y=v=>H-pad-((v-mn)/rng)*(H-2*pad);
+  const pts=s.map((p,i)=>[X(i),Y(p.v)]);
+  const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const n=s.length;let sx=0,sy=0,sxy=0,sxx=0;s.forEach((p,i)=>{sx+=i;sy+=p.v;sxy+=i*p.v;sxx+=i*i;});
+  const slope=n>1?(n*sxy-sx*sy)/(n*sxx-sx*sx):0,inter=(sy-slope*sx)/n;
+  const trend=`M ${X(0).toFixed(1)} ${Y(inter).toFixed(1)} L ${X(n-1).toFixed(1)} ${Y(inter+slope*(n-1)).toFixed(1)}`;
+  const dots=pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" fill="var(--gold)"/>`).join('');
+  const chg=(s[n-1].v-s[0].v);
+  return `<svg viewBox="0 0 ${W} ${H}" class="wgraph">${n>1?`<path d="${trend}" stroke="var(--violet)" stroke-width="2" fill="none" stroke-dasharray="4 3" opacity=".85"/>`:''}
+    <path d="${line}" stroke="var(--gold)" stroke-width="1.5" fill="none"/>${dots}</svg>
+    <div class="wstats mono"><span>${n} pt${n===1?'':'s'}</span><span>${s[0].v.toFixed(1)} → ${s[n-1].v.toFixed(1)} kg</span><span style="color:${chg>0?'#e06c75':(chg<0?'#56C596':'var(--muted)')}">${chg>=0?'+':''}${chg.toFixed(1)} kg</span></div>`;}
+function weightHTML(){const today=U().weight&&U().weight[dstr()];
+  return `<div class="seclabel"><span>Weight trend</span></div>
+   <div class="panel card">
+     <div class="hint" style="font-style:italic;margin-bottom:10px">*weekly weight trend is more important than daily fluctuations bruv, chill out</div>
+     <div class="addbar"><input id="wtInput" inputmode="decimal" placeholder="Today's weight (kg)…" value="${today!=null?today:''}"/><button id="wtLog">Log</button></div>
+     <div class="wmodes">${[['D','Daily'],['W','Weekly'],['M','Monthly']].map(([m,l])=>`<button class="wmode${weightMode===m?' on':''}" data-wmode="${m}">${l}</button>`).join('')}</div>
+     ${weightGraphSVG()}
+   </div>`;}
 function calcPaneHTML(){
   const i=U().calc.inputs||{};
   const sexv=i.sex||'male',act=i.activity||'1.375',goalv=i.goal||'recomp';
   const o=(val,label,cur)=>`<option value="${val}" ${cur===val?'selected':''}>${label}</option>`;
-  return `<div class="seclabel"><span>Body Calc · inputs</span></div>
+  return `${weightHTML()}
+  <div class="seclabel"><span>Body Calc · inputs</span></div>
   <div class="panel card">
     <div class="cgrid">
       <label>Sex<select id="c_sex">${o('male','Male',sexv)}${o('female','Female',sexv)}</select></label>
@@ -1382,6 +1465,9 @@ function calcPaneHTML(){
 }
 function wireCalc(root){
   const f=id=>root.querySelector('#'+id);
+  const wl=f('wtLog');if(wl)wl.onclick=()=>logWeight(f('wtInput').value);
+  const wi=f('wtInput');if(wi)wi.onkeydown=e=>{if(e.key==='Enter')logWeight(wi.value);};
+  root.querySelectorAll('[data-wmode]').forEach(e=>e.onclick=()=>{weightMode=e.dataset.wmode;render();});
   const ids=['c_sex','c_age','c_weight','c_height','c_bf','c_neck','c_waist','c_hip','c_maint','c_activity','c_goal','c_athlete'];
   const save=()=>{U().calc.inputs={sex:f('c_sex').value,age:f('c_age').value,weight:f('c_weight').value,height:f('c_height').value,
     bf:f('c_bf').value,neck:f('c_neck').value,waist:f('c_waist').value,hip:f('c_hip').value,
@@ -1393,7 +1479,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v19 · food-proxy-fn';
+const APP_VERSION='v20 · meals-water-weight';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
@@ -1428,7 +1514,9 @@ async function flushNow(){if(!cloudOn()||!authUser||!dirty||!synced)return;clear
   const r2=await sb.from('profiles').update({data:{gym:S.gym}}).eq('id','shared');
   if(!((r1&&r1.error)||(r2&&r2.error)))dirty=false;}catch(e){}}
 function typing(){const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);}
-function syncRender(){if(typing())return;render();}
+let lastInteract=0,_srT=null;
+function markInteract(){lastInteract=Date.now();}
+function syncRender(){if(typing()||Date.now()-lastInteract<600){clearTimeout(_srT);_srT=setTimeout(()=>{if(!typing()&&Date.now()-lastInteract>=550)render();},700);return;}render();}
 async function reconcile(){if(!cloudOn())return;await cloudPull(false);if(dirty)await flushNow();syncRender();}
 function enterProfile(pid){S.currentUser=pid;route={name:'home'};profileOpen=false;persist();
   if(cloudOn()&&authUser!==pid){loginFor=pid;render();}else{showWelcome=true;render();}}
@@ -1460,7 +1548,7 @@ try{
   persist();render();
   if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});
     let _refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(_refreshing)return;_refreshing=true;location.reload();});}
-  window.addEventListener('load',()=>{initCloud();if(cloudOn()){refreshAuth().then(()=>cloudPull(true)).then(()=>{render();cloudSubscribe();});
+  window.addEventListener('load',()=>{initCloud();['touchstart','touchmove','pointerdown','wheel','scroll'].forEach(ev=>window.addEventListener(ev,markInteract,{passive:true,capture:true}));if(cloudOn()){refreshAuth().then(()=>cloudPull(true)).then(()=>{render();cloudSubscribe();});
     document.addEventListener('visibilitychange',()=>{if(!cloudOn())return;if(document.visibilityState==='hidden')flushNow();else reconcile();});
     window.addEventListener('focus',()=>{if(cloudOn())reconcile();});
     window.addEventListener('pagehide',()=>{if(cloudOn())flushNow();});
