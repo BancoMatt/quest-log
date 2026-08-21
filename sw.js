@@ -2,7 +2,7 @@
    - Same-origin app files: NETWORK-FIRST (updates propagate; cache is offline fallback).
    - Supabase API + realtime: NEVER cached (must always be live — this was the sync bug).
    - Supabase JS library (jsdelivr CDN): cache-first so the app can boot offline. */
-const C = 'questlog-v16';
+const C = 'questlog-v17';
 const ASSETS = ['./','./index.html','./config.js','./manifest.webmanifest','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
