@@ -2,7 +2,7 @@
    - Same-origin app files: NETWORK-FIRST (updates propagate; cache is offline fallback).
    - Supabase API + realtime: NEVER cached (must always be live — this was the sync bug).
    - Supabase JS library (jsdelivr CDN): cache-first so the app can boot offline. */
-const C = 'questlog-v17';
+const C = 'questlog-v18';
 const ASSETS = ['./','./index.html','./config.js','./manifest.webmanifest','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -25,6 +25,8 @@ self.addEventListener('fetch', e => {
 
   // Supabase (database reads/writes + realtime): always go to network, never cache.
   if (/(^|\.)supabase\.(co|in)$/.test(url.hostname)) return;
+  // Food database + CORS proxies: always network, never touched by the SW.
+  if (/(openfoodfacts\.org|corsproxy\.io|allorigins\.win)$/.test(url.hostname)) return;
 
   // Our own app shell: network-first, fall back to cache when offline.
   if (url.origin === location.origin) {

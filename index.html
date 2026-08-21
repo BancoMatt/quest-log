@@ -78,6 +78,14 @@
   .microgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
   .mgcell{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)}
   .mgcell span{color:var(--muted)}
+  .scanstat{margin:12px 0 8px;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px}
+  .spin{width:30px;height:30px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--gold);animation:qspin .8s linear infinite}
+  @keyframes qspin{to{transform:rotate(360deg)}}
+  .scanmsg{font-weight:700;letter-spacing:.6px;font-size:14px}
+  .scanmsg.ok{color:#56C596}.scanmsg.bad{color:#e06c75}
+  .scanok,.scanbad{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;animation:wcin .2s ease}
+  .scanok{background:rgba(86,197,150,.15);color:#56C596;border:2px solid #56C596}
+  .scanbad{background:rgba(224,108,117,.15);color:#e06c75;border:2px solid #e06c75}
 
   .hero{padding:18px 16px;margin-bottom:18px}
   .herotop{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
@@ -792,12 +800,16 @@ function mapOff(p){const n=p.nutriments||{};
        vitc:mg(n['vitamin-c_100g']),vita:ug(n['vitamin-a_100g']),vitd:ug(n['vitamin-d_100g']),
        vitb6:mg(n['vitamin-b6_100g']),vitb12:ug(n['vitamin-b12_100g']),cholesterol:mg(n.cholesterol_100g)}};}
 function hasFood(p){return p.name&&(p.n.kcal>0||p.n.protein>0||p.n.carbs>0||p.n.fat>0);}
+async function offFetch(url){
+  const tries=[url,'https://corsproxy.io/?url='+encodeURIComponent(url),'https://api.allorigins.win/raw?url='+encodeURIComponent(url)];
+  let err;for(const u of tries){try{const r=await fetch(u);if(r.ok){const txt=await r.text();try{return JSON.parse(txt);}catch(_){}}else err=new Error('HTTP '+r.status);}catch(e){err=e;}}
+  throw err||new Error('unreachable');}
 async function offSearch(q){
   const url='https://world.openfoodfacts.org/cgi/search.pl?search_terms='+encodeURIComponent(q)+'&search_simple=1&action=process&json=1&page_size=30&fields=code,product_name,product_name_en,generic_name,brands,nutriments,serving_size';
-  const r=await fetch(url);const j=await r.json();return (j.products||[]).map(mapOff).filter(hasFood);}
+  const j=await offFetch(url);return (j.products||[]).map(mapOff).filter(hasFood);}
 async function offBarcode(code){
   const url='https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_en,generic_name,brands,nutriments,serving_size';
-  const r=await fetch(url);const j=await r.json();if(j.status!==1||!j.product)return null;return mapOff(j.product);}
+  const j=await offFetch(url);if(!j||j.status!==1||!j.product)return null;return mapOff(j.product);}
 function servingGrams(item){const m=(item.serving||'').match(/([\d.]+)\s*g/);return m?Math.round(parseFloat(m[1]))||100:100;}
 function addFood(item,grams){if(!editGuard())return;const d=dstr();U().food=U().food||{};U().food[d]=U().food[d]||[];
   U().food[d].push({id:'f'+Date.now(),name:item.name,brand:item.brand,grams:Math.max(1,Math.round(grams))||100,n:item.n});
@@ -872,11 +884,11 @@ function wireFood(root){
     if(!canEdit()){toast('Log in to edit');return;}
     foodMsg='Looking up '+code+'…';render();
     try{const it=await offBarcode(code);if(it){foodPending=it;foodMsg='';}else foodMsg='Barcode '+code+' isn’t in Open Food Facts yet — try search by name.';}
-    catch(e){foodMsg='Lookup failed — check your connection.';}
+    catch(e){foodMsg='Couldn’t reach the food database — check your connection and try again.';}
     render();};
   if(bcb)bcb.onclick=()=>doBC(bc&&bc.value);
   if(bc)bc.onkeydown=e=>{if(e.key==='Enter')doBC(bc.value);};
-  if(sb)sb.onclick=()=>startScan(doBC);
+  if(sb)sb.onclick=()=>startScan(it=>{foodPending=it;foodMsg='';render();});
   root.querySelectorAll('[data-micacc]').forEach(h=>h.onclick=()=>h.closest('.acc').classList.toggle('open'));
   root.querySelectorAll('[data-fdel]').forEach(e=>e.onclick=()=>removeFood(e.dataset.fdel));
   const fov=root.querySelector('#fov');
@@ -884,23 +896,32 @@ function wireFood(root){
     root.querySelector('#fadd').onclick=add;root.querySelector('#fcancel').onclick=()=>{foodPending=null;render();};
     fov.onclick=e=>{if(e.target===fov){foodPending=null;render();}};}
 }
-async function startScan(onCode){
-  if(!('BarcodeDetector'in window)){foodMsg='Camera scanning isn’t supported on this device — type the barcode number instead.';render();return;}
+async function startScan(finish){
+  if(!('BarcodeDetector'in window)){foodMsg='Camera scanning isn’t supported on this device — type the barcode number instead.';foodBCopen=true;render();return;}
   let stream;try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});}
-  catch(e){foodMsg='Camera unavailable — type the barcode number instead.';render();return;}
+  catch(e){foodMsg='Camera unavailable — type the barcode number instead.';foodBCopen=true;render();return;}
   const ov=document.createElement('div');ov.className='overlay';ov.style.zIndex=60;
-  ov.innerHTML=`<div class="sheet" style="max-width:360px;text-align:center"><div class="dtitle" style="font-size:18px">Scan barcode</div>
+  ov.innerHTML=`<div class="sheet" style="max-width:360px;text-align:center">
+    <div class="dtitle" style="font-size:18px">Scan barcode</div>
     <video id="scanv" playsinline muted style="width:100%;border-radius:12px;background:#000;aspect-ratio:3/4;object-fit:cover"></video>
-    <div class="hint" style="margin-top:8px">Point at the barcode</div>
-    <button class="btn ghost" id="scancancel" style="margin-top:12px;width:100%">Cancel</button></div>`;
+    <div id="scanStatus" class="scanstat"><div class="spin"></div><div class="hint">Point the camera at the barcode…</div></div>
+    <button class="btn ghost" id="scancancel" style="margin-top:2px;width:100%">Cancel</button></div>`;
   document.body.appendChild(ov);
   const v=ov.querySelector('#scanv');v.srcObject=stream;try{await v.play();}catch(e){}
   let det;try{det=new window.BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128']});}catch(e){det=new window.BarcodeDetector();}
-  let done=false;const stop=()=>{done=true;stream.getTracks().forEach(t=>t.stop());ov.remove();};
-  ov.querySelector('#scancancel').onclick=stop;
-  const loop=async()=>{if(done)return;
-    try{const codes=await det.detect(v);if(codes&&codes.length){const c=codes[0].rawValue;stop();onCode(c);return;}}catch(e){}
-    requestAnimationFrame(loop);};
+  const status=ov.querySelector('#scanStatus');
+  let done=false,busy=false;const delay=ms=>new Promise(r=>setTimeout(r,ms));
+  const cleanup=()=>{done=true;try{stream.getTracks().forEach(t=>t.stop());}catch(e){}try{ov.remove();}catch(e){}};
+  ov.querySelector('#scancancel').onclick=cleanup;
+  const idle=()=>{status.innerHTML='<div class="spin"></div><div class="hint">Point the camera at the barcode…</div>';};
+  const handle=async(code)=>{if(busy||done)return;busy=true;
+    status.innerHTML='<div class="spin"></div><div class="scanmsg">Checking '+code+'…</div>';
+    let item=null;try{const[it]=await Promise.all([offBarcode(code),delay(1400)]);item=it;}catch(e){item=null;}
+    if(done)return;
+    if(item){status.innerHTML='<div class="scanok">✓</div><div class="scanmsg ok">PRODUCT FOUND</div>';await delay(850);if(done)return;cleanup();finish(item);}
+    else{status.innerHTML='<div class="scanbad">✕</div><div class="scanmsg bad">PRODUCT NOT FOUND</div>';await delay(1400);if(done)return;idle();busy=false;}};
+  const loop=async()=>{if(done)return;if(!busy){try{const codes=await det.detect(v);if(codes&&codes.length)handle(codes[0].rawValue);}catch(e){}}
+    if(!done)requestAnimationFrame(loop);};
   requestAnimationFrame(loop);
 }
 function renderMain(app){
@@ -1364,7 +1385,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v17 · food-plus';
+const APP_VERSION='v18 · scan-proxy';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
