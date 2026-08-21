@@ -800,16 +800,24 @@ function mapOff(p){const n=p.nutriments||{};
        vitc:mg(n['vitamin-c_100g']),vita:ug(n['vitamin-a_100g']),vitd:ug(n['vitamin-d_100g']),
        vitb6:mg(n['vitamin-b6_100g']),vitb12:ug(n['vitamin-b12_100g']),cholesterol:mg(n.cholesterol_100g)}};}
 function hasFood(p){return p.name&&(p.n.kcal>0||p.n.protein>0||p.n.carbs>0||p.n.fat>0);}
-async function offFetch(url){
-  const tries=[url,'https://corsproxy.io/?url='+encodeURIComponent(url),'https://api.allorigins.win/raw?url='+encodeURIComponent(url)];
-  let err;for(const u of tries){try{const r=await fetch(u);if(r.ok){const txt=await r.text();try{return JSON.parse(txt);}catch(_){}}else err=new Error('HTTP '+r.status);}catch(e){err=e;}}
+const FOOD_FIELDS='code,product_name,product_name_en,generic_name,brands,nutriments,serving_size';
+async function foodApi(params){
+  const isBC=params.barcode!=null;
+  const qs=isBC?('barcode='+encodeURIComponent(params.barcode)):('q='+encodeURIComponent(params.q));
+  // 1) first-party Supabase Edge Function proxy (reliable, no CORS)
+  try{if(typeof CLOUD!=='undefined'&&CLOUD.url&&CLOUD.anon){
+    const r=await fetch(CLOUD.url+'/functions/v1/food?'+qs,{headers:{apikey:CLOUD.anon,Authorization:'Bearer '+CLOUD.anon}});
+    if(r.ok){const j=await r.json();if(j&&!j.error)return j;}}}catch(e){}
+  // 2) fallback: direct Open Food Facts, then public CORS proxies
+  const off=isBC
+    ?'https://world.openfoodfacts.org/api/v0/product/'+encodeURIComponent(params.barcode)+'.json?fields='+FOOD_FIELDS
+    :'https://world.openfoodfacts.org/cgi/search.pl?search_terms='+encodeURIComponent(params.q)+'&search_simple=1&action=process&json=1&page_size=30&fields='+FOOD_FIELDS;
+  const tries=[off,'https://corsproxy.io/?url='+encodeURIComponent(off),'https://api.allorigins.win/raw?url='+encodeURIComponent(off)];
+  let err;for(const url of tries){try{const r=await fetch(url);if(r.ok){const t=await r.text();try{return JSON.parse(t);}catch(_){}}else err=new Error('HTTP '+r.status);}catch(e){err=e;}}
   throw err||new Error('unreachable');}
-async function offSearch(q){
-  const url='https://world.openfoodfacts.org/cgi/search.pl?search_terms='+encodeURIComponent(q)+'&search_simple=1&action=process&json=1&page_size=30&fields=code,product_name,product_name_en,generic_name,brands,nutriments,serving_size';
-  const j=await offFetch(url);return (j.products||[]).map(mapOff).filter(hasFood);}
-async function offBarcode(code){
-  const url='https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_en,generic_name,brands,nutriments,serving_size';
-  const j=await offFetch(url);if(!j||j.status!==1||!j.product)return null;return mapOff(j.product);}
+async function offSearch(q){const j=await foodApi({q});return (j.products||[]).map(mapOff).filter(hasFood);}
+async function offBarcode(code){const j=await foodApi({barcode:String(code).replace(/\D/g,'')});
+  const p=j&&j.product;if(!p||!(p.product_name||p.product_name_en||p.nutriments))return null;return mapOff(p);}
 function servingGrams(item){const m=(item.serving||'').match(/([\d.]+)\s*g/);return m?Math.round(parseFloat(m[1]))||100:100;}
 function addFood(item,grams){if(!editGuard())return;const d=dstr();U().food=U().food||{};U().food[d]=U().food[d]||[];
   U().food[d].push({id:'f'+Date.now(),name:item.name,brand:item.brand,grams:Math.max(1,Math.round(grams))||100,n:item.n});
@@ -1385,7 +1393,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v18 · scan-proxy';
+const APP_VERSION='v19 · food-proxy-fn';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
