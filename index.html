@@ -352,7 +352,6 @@ const ICONS=['zap','chart','trend','dumbbell','sigma','grad','book','bed','moon'
 const DAILY_DEFAULT=[
  {id:'backtest',name:'Backtest + orderflow',xp:50,cad:'daily',ic:'chart',deep:true,coreDaily:true,area:'markets'},
  {id:'trading', name:'Live trading',         xp:40,cad:'Mon–Fri',ic:'trend',weekdayCore:true,area:'markets'},
- {id:'gym',     name:'Gym workout',          xp:50,cad:'5×/week · tap to open',ic:'dumbbell',deep:true,area:'health',view:'gym'},
  {id:'math',    name:'Math practice',        xp:25,cad:'daily · 30m',ic:'sigma',coreDaily:true,area:'knowledge'},
  {id:'uni',     name:'Study 1 uni subject',  xp:25,cad:'daily · ~25m',ic:'grad',coreDaily:true,area:'knowledge'},
  {id:'reading', name:'Book reading',         xp:15,cad:'daily · reading list',ic:'book',coreDaily:true,area:'knowledge',detail:'books'},
@@ -363,6 +362,7 @@ const WEEKLY=[
  {id:'grocery', name:'Grocery run',                 xp:25,target:1,cad:'1× / week',ic:'cart',area:'health',detail:'grocery'},
  {id:'mealprep',name:'Meal prep',                   xp:25,target:3,cad:'3× / week',ic:'utensils',area:'health'},
  {id:'resale',  name:'Resale: list / ship / source',xp:25,target:3,cad:'3× / week',ic:'pkg',area:'business'},
+ {id:'gym',     name:'Gym workout',                xp:50,target:4,cad:'4× / week · tap to open',ic:'dumbbell',area:'health',view:'gym'},
 ];
 const AREAS=[
  {id:'markets',name:'Markets',v:'--markets'},{id:'health',name:'Health',v:'--health'},
@@ -633,7 +633,11 @@ function normalizeUsers(){const defs=defState().users;for(const id in defs)if(!S
   if(!u.areaLabels)u.areaLabels=du.areaLabels;
   if(!u.weeklyDefs||!u.weeklyDefs.length)u.weeklyDefs=WEEKLY.map(w=>Object.assign({},w));
   if(!u.today||u.today.date!==dstr())u.today=freshDay(dstr());
-  tierMigrate(u);}}
+  gymMigrate(u);tierMigrate(u);}}
+function gymMigrate(u){if(u.gymWeekly)return;
+  u.daily=(u.daily||[]).filter(t=>t.id!=='gym');
+  if(!(u.weeklyDefs||[]).some(w=>w.id==='gym'))u.weeklyDefs.push({id:'gym',name:'Gym workout',xp:50,target:4,cad:'4× / week · tap to open',ic:'dumbbell',area:'health',view:'gym'});
+  u.gymWeekly=true;}
 function fromV3(o){const s=defState(),m=s.users.matt;
   ['dailyGoal','weeklyGoal','totalXP','cleared','badges','today','history','weekly','areaXP','books','grocery','shutdownLog','notes','calc'].forEach(k=>{if(o[k]!==undefined)m[k]=o[k];});
   if(o.gym){s.gym={sel:o.gym.sel||0,view:o.gym.view||'log',days:o.gym.days||defGym().days};m.gymSessions=o.gym.sessions||{};}
@@ -819,16 +823,17 @@ function foodTargets(){const r=U().calc&&U().calc.report;if(!r)return null;
 function mapOff(p){const n=p.nutriments||{};
   let kcal=foodNum(n['energy-kcal_100g']||n['energy-kcal_value']);
   if(!kcal){const kj=foodNum(n['energy-kj_100g'])||foodNum(n.energy_100g);if(kj)kcal=Math.round(kj/4.184);}
-  const sodium=n.sodium_100g!=null?foodNum(n.sodium_100g):(n.salt_100g!=null?foodNum(n.salt_100g)/2.5:0);
+  const gv=base=>{let v=n[base+'_100g'];if(v==null||v==='')v=n[base+'_value'];if(v==null||v==='')v=n[base+'_serving'];return foodNum(v);};
+  const sodium=(n.sodium_100g!=null?foodNum(n.sodium_100g):(n.salt_100g!=null?foodNum(n.salt_100g)/2.5:gv('sodium')));
   const mg=x=>Math.round(foodNum(x)*1000*10)/10, ug=x=>Math.round(foodNum(x)*1e6*10)/10;
   return {code:p.code||'',name:(p.product_name||p.product_name_en||p.generic_name||'').trim()||'Unnamed product',
     brand:((p.brands||'').split(',')[0]||'').trim(),serving:p.serving_size||'',
-    n:{kcal:Math.round(kcal),protein:foodNum(n.proteins_100g),carbs:foodNum(n.carbohydrates_100g),fat:foodNum(n.fat_100g),
-       fiber:foodNum(n.fiber_100g),sugars:foodNum(n.sugars_100g),satfat:foodNum(n['saturated-fat_100g']),
-       sodium:mg(sodium),potassium:mg(n.potassium_100g),calcium:mg(n.calcium_100g),iron:mg(n.iron_100g),
-       magnesium:mg(n.magnesium_100g),zinc:mg(n.zinc_100g),phosphorus:mg(n.phosphorus_100g),
-       vitc:mg(n['vitamin-c_100g']),vita:ug(n['vitamin-a_100g']),vitd:ug(n['vitamin-d_100g']),
-       vitb6:mg(n['vitamin-b6_100g']),vitb12:ug(n['vitamin-b12_100g']),cholesterol:mg(n.cholesterol_100g)}};}
+    n:{kcal:Math.round(kcal),protein:gv('proteins'),carbs:gv('carbohydrates'),fat:gv('fat'),
+       fiber:gv('fiber'),sugars:gv('sugars'),satfat:gv('saturated-fat'),
+       sodium:mg(sodium),potassium:mg(gv('potassium')),calcium:mg(gv('calcium')),iron:mg(gv('iron')),
+       magnesium:mg(gv('magnesium')),zinc:mg(gv('zinc')),phosphorus:mg(gv('phosphorus')),
+       vitc:mg(gv('vitamin-c')),vita:ug(gv('vitamin-a')),vitd:ug(gv('vitamin-d')),
+       vitb6:mg(gv('vitamin-b6')),vitb12:ug(gv('vitamin-b12')),cholesterol:mg(gv('cholesterol'))}};}
 function hasFood(p){return p.name&&(p.n.kcal>0||p.n.protein>0||p.n.carbs>0||p.n.fat>0);}
 const FOOD_FIELDS='code,product_name,product_name_en,generic_name,brands,nutriments,serving_size';
 async function foodApi(params){
@@ -913,7 +918,6 @@ function foodPaneHTML(){
     <div class="micros">fiber ${t.fiber}g · sugars ${t.sugars}g · sat.fat ${t.satfat}g · sodium ${Math.round(t.sodium)}mg</div>
     ${tg?'':'<div class="hint" style="margin-top:8px">Fill in Body Calc to see targets & how much you have left.</div>'}</div>
   ${microsHTML(t)}
-  ${weekKcalHTML()}
   ${waterHTML()}
   <div class="seclabel"><span>Add food</span></div>
   <div class="panel card">
@@ -930,6 +934,7 @@ function foodPaneHTML(){
   </div>
   <div class="seclabel"><span>Diary</span></div>
   ${diaryHTML()}
+  ${weekKcalHTML()}
   ${foodPending?foodAddModalHTML():''}`;
 }
 function wireFood(root){
@@ -1090,6 +1095,7 @@ function wireHome(root){
   root.querySelectorAll('[data-open]').forEach(e=>e.onclick=()=>{const t=U().daily.find(x=>x.id===e.dataset.open);
     if(t&&t.view==='gym')go({name:'gym'});else go({name:'task',id:e.dataset.open});});
   root.querySelectorAll('[data-wk]').forEach(e=>e.onclick=()=>{const p=e.dataset.wk.split(':');bumpWeekly(p[0],+p[1]);});
+  root.querySelectorAll('[data-wgym]').forEach(e=>e.onclick=()=>go({name:'gym'}));
   root.querySelectorAll('[data-wopen]').forEach(e=>e.onclick=()=>go({name:'task',id:e.dataset.wopen}));
   root.querySelectorAll('[data-g]').forEach(e=>e.onclick=()=>{const p=e.dataset.g.split(':');setGoal(p[0],+p[1]);});
   root.querySelectorAll('[data-side]').forEach(e=>e.onclick=()=>toggleSide(e.dataset.side));
@@ -1112,7 +1118,7 @@ function rowHTML(t,done){
 function weeklyRow(q,n){const full=n>=q.target;
   return `<div class="row">
     <span class="ico" style="color:${full?'var(--green)':'var(--muted)'}">${svg(P[q.ic])}</span>
-    <div class="rbody" ${q.detail?`data-wopen="${q.id}"`:''}><div class="t">${q.name}</div><div class="c">${q.cad} · +${q.xp} each</div></div>
+    <div class="rbody" ${q.detail?`data-wopen="${q.id}"`:(q.view==='gym'?`data-wgym="1"`:'')}><div class="t">${q.name}</div><div class="c">${q.cad} · +${q.xp} each</div></div>
     <div class="cnt"><button data-wk="${q.id}:-1">−</button><span class="n${full?' full':''}">${n}/${q.target}</span><button data-wk="${q.id}:1">+</button></div></div>`;
 }
 
@@ -1283,13 +1289,13 @@ function renderWorkout(host){
     <div class="addbar"><input id="exname" placeholder="Add exercise…"/>
       <select id="exmus"><option value="auto">auto</option>${MUSCLES.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select>
       <button id="exadd">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div>
-    <button class="btn ${U().today.done.gym?'done':''}" id="gymdone" style="margin-top:16px">${U().today.done.gym?'✓ Workout logged today':'Mark workout done  +50 XP'}</button>`;
+    <button class="btn ${U().today.done.gym?'done':''}" id="gymdone" style="margin-top:16px">${U().today.done.gym?'✓ Workout logged today (counts to weekly)':'Log this workout  +50 XP'}</button>`;
   host.querySelectorAll('[data-day]').forEach(e=>e.onclick=()=>{g.sel=+e.dataset.day;persist();render();});
   const dn=host.querySelector('#dayname');dn.readOnly=!canEdit();dn.oninput=()=>{if(!editGuard())return;day.name=dn.value;persist();};
   const exadd=()=>{const v=host.querySelector('#exname').value.trim();if(!v)return;const pick=host.querySelector('#exmus').value;
     if(!editGuard())return;day.ex.push({id:'e'+Date.now(),name:v,mus:pick==='auto'?guessMus(v):[pick]});persist();render();};
   host.querySelector('#exadd').onclick=exadd;host.querySelector('#exname').onkeydown=e=>{if(e.key==='Enter')exadd();};
-  host.querySelector('#gymdone').onclick=()=>{toggleDaily('gym');render();};
+  host.querySelector('#gymdone').onclick=()=>{const done=!!U().today.done.gym;bumpWeekly('gym',done?-1:1);U().today.done.gym=!done;persist();render();};
   day.ex.forEach(ex=>{
     host.querySelectorAll(`[data-addset="${ex.id}"]`).forEach(e=>e.onclick=()=>{const s=ensureSession(today);if(!editGuard())return;s.entries[ex.id]=(s.entries[ex.id]||[]).concat([{w:'',r:''}]);persist();render();});
     host.querySelectorAll(`[data-rmset="${ex.id}"]`).forEach(e=>e.onclick=()=>{if(!editGuard())return;const a=ensureSession(today).entries[ex.id]||[];a.splice(+e.dataset.i,1);persist();render();});
@@ -1479,7 +1485,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v20 · meals-water-weight';
+const APP_VERSION='v21 · gym-weekly';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
