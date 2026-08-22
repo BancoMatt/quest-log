@@ -116,12 +116,18 @@
   .flowrow>div{flex:1;text-align:center;background:var(--panel2);border-radius:10px;padding:9px 4px}
   .flowrow .hint{display:block;font-size:10px;margin-bottom:2px}.flowrow b{font-size:14px}
   .finadd{display:flex;gap:8px}
-  .finadd input,.finadd select{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-size:13.5px;outline:none}
+  .finadd input,.finadd select{width:100%;box-sizing:border-box;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-size:13.5px;outline:none}
   .finadd input:first-child{flex:1}.finadd select{flex:1}
   .finlist{margin-top:6px}
   .fgrid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .fgrid2 label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--muted)}
-  .fgrid2 input{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-size:14.5px;outline:none}
+  .fgrid2 label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--muted);min-width:0}
+  .fgrid2 input{width:100%;box-sizing:border-box;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-size:14.5px;outline:none}
+  .scntabs{display:flex;gap:6px;margin-bottom:12px}
+  .scntab{flex:1;padding:8px 4px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:11.5px;cursor:pointer;text-align:center}
+  .scntab.on{border-color:var(--gold);color:var(--gold)}
+  .fireout{display:flex;gap:8px;margin-top:12px}
+  .fireout>div{flex:1;text-align:center;background:var(--panel2);border-radius:10px;padding:12px 6px}
+  .fireout b{display:block;font-size:17px}.fireout .hint{font-size:10px;margin-top:2px}
   .tips{margin:0;padding-left:18px;font-size:13px;color:var(--text2,#cfd3da)}
   .tips li{margin:6px 0}
   .scanstat{margin:12px 0 8px;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px}
@@ -1068,6 +1074,7 @@ function wireSleep(root){
 }
 
 /* ================= finance ================= */
+let finScenario='compound';
 function finItems(){return (U().finance&&U().finance.items)||[];}
 function monthlyOf(it){return it.freq==='month'?it.amount:it.freq==='week'?it.amount*4.333:0;}
 function finFlow(){let inc=0,exp=0;finItems().forEach(it=>{const m=monthlyOf(it);if(it.kind==='in')inc+=m;else exp+=m;});return {inc,exp,net:inc-exp};}
@@ -1079,13 +1086,56 @@ function goalProjHTML(g){const t=cnum(g.target),s=cnum(g.saved),m=cnum(g.monthly
   const rem=Math.max(0,t-s),months=Math.ceil(rem/m),dt=new Date();dt.setMonth(dt.getMonth()+months);const pct=Math.min(100,Math.round(s/t*100));
   return `<div class="mb-track" style="height:9px;margin-top:12px"><div class="mb-fill" style="width:${pct}%;background:var(--gold)"></div></div>
    <div class="status mono" style="margin-top:8px">${rem<=0?'Goal reached 🎉':'€'+n0(rem)+' to go · '+months+' month'+(months===1?'':'s')+' (~'+dt.toLocaleDateString('en-GB',{month:'short',year:'numeric'})+')'}</div>`;}
-function investGraphSVG(P0,PM,rate){const yrs=20,W=300,H=120,pad=10;const val=[],con=[];
-  for(let y=0;y<=yrs;y++){val.push(investFV(P0,PM,rate,y));con.push(P0+PM*12*y);}
-  const mx=Math.max(...val,1),X=y=>pad+y*(W-2*pad)/yrs,Y=v=>H-pad-(v/mx)*(H-2*pad);
-  const path=a=>a.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
-  const area=path(val)+` L ${X(yrs).toFixed(1)} ${(H-pad)} L ${X(0).toFixed(1)} ${(H-pad)} Z`;
-  return `<svg viewBox="0 0 ${W} ${H}" class="wgraph" style="margin-top:10px"><path d="${area}" fill="rgba(86,197,150,.12)" stroke="none"/><path d="${path(val)}" stroke="#56C596" stroke-width="2" fill="none"/><path d="${path(con)}" stroke="#5AA9E6" stroke-width="2" fill="none"/></svg>
-   <div class="wstats mono"><span style="color:#56C596">● projected</span><span style="color:#5AA9E6">● you put in</span><span>${yrs}y</span></div>`;}
+function investGraphSVG(P0,PM,rate){const yrs=20,W=300,H=130,pad=10;
+  const lowR=Math.max(0,rate-2.5),highR=rate+2.5;const base=[],low=[],high=[],con=[];
+  for(let y=0;y<=yrs;y++){base.push(investFV(P0,PM,rate,y));low.push(investFV(P0,PM,lowR,y));high.push(investFV(P0,PM,highR,y));con.push(P0+PM*12*y);}
+  const mx=Math.max(...high,1),X=y=>pad+y*(W-2*pad)/yrs,Y=v=>H-pad-(Math.max(0,v)/mx)*(H-2*pad);
+  const line=a=>a.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
+  const band=line(high)+low.map((v,i)=>' L '+X(yrs-i).toFixed(1)+' '+Y(low[yrs-i]).toFixed(1)).join('')+' Z';
+  return `<svg viewBox="0 0 ${W} ${H}" class="wgraph" style="margin-top:10px">
+    <path d="${band}" fill="rgba(86,197,150,.13)" stroke="none"/>
+    <path d="${line(high)}" stroke="rgba(86,197,150,.45)" stroke-width="1" fill="none" stroke-dasharray="3 3"/>
+    <path d="${line(low)}" stroke="rgba(86,197,150,.45)" stroke-width="1" fill="none" stroke-dasharray="3 3"/>
+    <path d="${line(base)}" stroke="#56C596" stroke-width="2" fill="none"/>
+    <path d="${line(con)}" stroke="#5AA9E6" stroke-width="2" fill="none"/></svg>
+   <div class="wstats mono"><span style="color:#56C596">● projected</span><span style="color:#5AA9E6">● you put in</span><span>±2.5% band</span></div>`;}
+function finInvestHTML(inv){
+  const initial=cnum(inv.initial),pm=cnum(inv.monthly),rate=inv.rate!=null?cnum(inv.rate):7;
+  const wd=cnum(inv.withdraw),fire=cnum(inv.fire),years=[5,10,15,20];
+  const scn=[['compound','Compound'],['withdraw','Withdrawals'],['fire','Live off it']];
+  const tabs=`<div class="scntabs">${scn.map(([k,l])=>`<button class="scntab${finScenario===k?' on':''}" data-scn="${k}">${l}</button>`).join('')}</div>`;
+  const base3=`<div class="fgrid2"><label>Initial €<input id="fvInit" inputmode="decimal" value="${inv.initial||''}"/></label>
+     <label>Monthly €<input id="fvMon" inputmode="decimal" value="${inv.monthly||''}"/></label>
+     <label>Return %/yr<input id="fvRate" inputmode="decimal" value="${inv.rate!=null?inv.rate:7}"/></label></div>`;
+  if(finScenario==='fire'){
+    const annual=fire*12;const need4=annual/0.04,needR=rate>0?annual/(rate/100):0;
+    let yrsTo=null;for(let y=1;y<=60;y++){if(investFV(initial,pm,rate,y)>=need4){yrsTo=y;break;}}
+    return `${tabs}
+     <div class="fgrid2"><label>Return %/yr<input id="fvRate" inputmode="decimal" value="${inv.rate!=null?inv.rate:7}"/></label>
+       <label>Income wanted €/mo<input id="fvFire" inputmode="decimal" value="${inv.fire||''}"/></label></div>
+     <div class="fgrid2" style="margin-top:10px"><label>Have now €<input id="fvInit" inputmode="decimal" value="${inv.initial||''}"/></label>
+       <label>Investing €/mo<input id="fvMon" inputmode="decimal" value="${inv.monthly||''}"/></label></div>
+     ${fire?`<div class="fireout"><div><b class="mono">€${n0(need4)}</b><span class="hint">nest egg (safe 4% rule)</span></div>
+        <div><b class="mono">${needR?'€'+n0(needR):'—'}</b><span class="hint">at your ${rate}%/yr</span></div></div>
+      <div class="status mono" style="margin-top:10px">${yrsTo?'At €'+n0(pm)+'/mo you hit the 4% number in ~'+yrsTo+' years':'Increase monthly investing to reach it within 60y'}</div>
+      <div class="hint" style="margin-top:6px">The 4% rule: you can safely draw ~4% of your pot per year. To live off €${n0(fire)}/mo you need about €${n0(need4)} invested.</div>`
+      :'<div class="hint" style="margin-top:10px">Enter the monthly income you want to live off.</div>'}`;
+  }
+  if(finScenario==='withdraw'){
+    const net=pm-wd;const yrsW=[5,10,15,20];
+    return `${tabs}${base3}
+     <div class="fgrid2" style="margin-top:10px"><label>Withdraw €/mo<input id="fvWd" inputmode="decimal" value="${inv.withdraw||''}"/></label>
+       <label style="justify-content:flex-end"><span class="hint">Net invested/mo</span><b class="mono" style="font-size:15px;color:${net>=0?'#56C596':'#e06c75'}">${net>=0?'+':'−'}€${n0(Math.abs(net))}</b></label></div>
+     ${investGraphSVG(initial,net,rate)}
+     <div class="finlist">${yrsW.map(y=>{const fv=investFV(initial,net,rate,y);return `<div class="row"><div class="rbody"><div class="t">${y} years</div><div class="c">${net<0?'drawing down':'net €'+n0(net)+'/mo in'}</div></div><span class="xp" style="color:${fv>=0?'#56C596':'#e06c75'}">€${n0(fv)}</span></div>`;}).join('')}</div>
+     <div class="hint" style="margin-top:6px">Contributions minus withdrawals. If net is negative you're drawing the pot down.</div>`;
+  }
+  // compound (default)
+  return `${tabs}${base3}
+   ${investGraphSVG(initial,pm,rate)}
+   <div class="finlist">${years.map(y=>{const b=investFV(initial,pm,rate,y),lo=investFV(initial,pm,Math.max(0,rate-2.5),y),hi=investFV(initial,pm,rate+2.5,y);
+     return `<div class="row"><div class="rbody"><div class="t">${y} years</div><div class="c">range €${n0(lo)} – €${n0(hi)}</div></div><span class="xp" style="color:#56C596">€${n0(b)}</span></div>`;}).join('')}</div>
+   <div class="hint" style="margin-top:6px">Never withdrawing — pure compounding. Shaded band = if markets do ±2.5%/yr better or worse. ~7–8%/yr is a common long-run S&P assumption; nothing is guaranteed.</div>`;}
 function financePaneHTML(){const F=U().finance||{};const flow=finFlow();const inv=F.invest||{},goal=F.goal||{};
   const initial=cnum(inv.initial),pm=cnum(inv.monthly),rate=inv.rate!=null?cnum(inv.rate):7;const years=[5,10,15,20];
   return `<div class="seclabel"><span>Net worth</span></div>
@@ -1108,21 +1158,19 @@ function financePaneHTML(){const F=U().finance||{};const flow=finFlow();const in
        <label>Save / month €<input id="fgMonthly" inputmode="decimal" value="${goal.monthly||''}"/></label></div>
      ${goalProjHTML(goal)}</div>
    <div class="seclabel"><span>Investing projection</span></div>
-   <div class="panel card"><div class="fgrid2"><label>Initial €<input id="fvInit" inputmode="decimal" value="${inv.initial||''}"/></label>
-       <label>Monthly €<input id="fvMon" inputmode="decimal" value="${inv.monthly||''}"/></label>
-       <label>Return %/yr<input id="fvRate" inputmode="decimal" value="${inv.rate!=null?inv.rate:7}"/></label></div>
-     ${investGraphSVG(initial,pm,rate)}
-     <div class="finlist">${years.map(y=>{const fv=investFV(initial,pm,rate,y),c=initial+pm*12*y;return `<div class="row"><div class="rbody"><div class="t">${y} years</div><div class="c">you put in €${n0(c)}</div></div><span class="xp" style="color:#56C596">€${n0(fv)}</span></div>`;}).join('')}</div>
-     <div class="hint" style="margin-top:6px">Estimate only — markets aren't guaranteed. ~7–8%/yr is a common long-run S&P assumption.</div></div>
+   <div class="panel card">${finInvestHTML(inv)}</div>
    <div class="seclabel"><span>Money tips</span></div>
-   <div class="panel card"><ul class="tips"><li>Pay yourself first — auto-transfer to savings on payday.</li><li>50 / 30 / 20: needs / wants / savings as a starting split.</li><li>Audit subscriptions monthly; cancel what you don't use.</li><li>Keep 3–6 months of expenses as a buffer before investing hard.</li><li>Invest regularly (DCA) instead of timing the market.</li></ul></div>`;}
+   <div class="panel card"><ul class="tips"><li>Be aggressive while you're young: aim for a <b>50/50 split</b> — half your income straight into savings &amp; investments, half for needs and wants.</li><li>Audit your subscriptions every month and cut anything you don't actually use.</li><li>Only invest money you don't live off — and don't pull it back out just because something came up.</li><li>Not sure which entries to pick? Just DCA into a broad index on a schedule instead of timing the market — you're not that guy, pal.</li></ul></div>`;}
 function wireFinance(root){
   const F=()=>{U().finance=U().finance||{networth:0,items:[],goal:{},invest:{rate:7}};return U().finance;};
   const fnw=root.querySelector('#fnw');if(fnw)fnw.onchange=()=>{if(!editGuard())return;F().networth=cnum(fnw.value);persist();render();};
   const saveGoal=()=>{if(!editGuard())return;const g=F().goal=F().goal||{};g.label=root.querySelector('#fgLabel').value;g.target=cnum(root.querySelector('#fgTarget').value);g.saved=cnum(root.querySelector('#fgSaved').value);g.monthly=cnum(root.querySelector('#fgMonthly').value);persist();render();};
   ['fgLabel','fgTarget','fgSaved','fgMonthly'].forEach(id=>{const el=root.querySelector('#'+id);if(el)el.onchange=saveGoal;});
-  const saveInv=()=>{if(!editGuard())return;const iv=F().invest=F().invest||{};iv.initial=cnum(root.querySelector('#fvInit').value);iv.monthly=cnum(root.querySelector('#fvMon').value);iv.rate=cnum(root.querySelector('#fvRate').value);persist();render();};
-  ['fvInit','fvMon','fvRate'].forEach(id=>{const el=root.querySelector('#'+id);if(el)el.onchange=saveInv;});
+  const saveInv=()=>{if(!editGuard())return;const iv=F().invest=F().invest||{};const g=id=>root.querySelector('#'+id);
+    if(g('fvInit'))iv.initial=cnum(g('fvInit').value);if(g('fvMon'))iv.monthly=cnum(g('fvMon').value);if(g('fvRate'))iv.rate=cnum(g('fvRate').value);
+    if(g('fvWd'))iv.withdraw=cnum(g('fvWd').value);if(g('fvFire'))iv.fire=cnum(g('fvFire').value);persist();render();};
+  ['fvInit','fvMon','fvRate','fvWd','fvFire'].forEach(id=>{const el=root.querySelector('#'+id);if(el)el.onchange=saveInv;});
+  root.querySelectorAll('[data-scn]').forEach(e=>e.onclick=()=>{finScenario=e.dataset.scn;render();});
   const add=root.querySelector('#fiAdd');if(add)add.onclick=()=>{if(!editGuard())return;const label=root.querySelector('#fiLabel').value.trim(),amt=cnum(root.querySelector('#fiAmt').value);if(!label||!amt){toast('Add a label and amount');return;}F().items=finItems().concat([{id:'m'+Date.now(),kind:root.querySelector('#fiKind').value,label,amount:amt,freq:root.querySelector('#fiFreq').value}]);persist();render();};
   root.querySelectorAll('[data-fidel]').forEach(e=>e.onclick=()=>{if(!editGuard())return;F().items=finItems().filter(x=>x.id!==e.dataset.fidel);persist();render();});
 }
@@ -1620,7 +1668,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v22 · sleep-finance';
+const APP_VERSION='v23 · invest-scenarios';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
