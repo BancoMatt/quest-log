@@ -141,8 +141,14 @@
 
   .hero{padding:18px 16px;margin-bottom:18px}
   .herotop{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-  .heroq{font-size:13px;color:var(--muted)}
-  .heroq b{color:var(--text);font-weight:600}
+  .heroq{display:flex;flex-direction:column;gap:3px}
+  .dayname{font-size:25px;font-weight:800;text-transform:uppercase;letter-spacing:.055em;line-height:1;
+    background:linear-gradient(96deg,#FFF3D6, var(--accent) 45%, #FFF0CE 72%, var(--accent));background-size:220% 100%;
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
+    filter:drop-shadow(0 1px 7px color-mix(in srgb, var(--accent) 42%, transparent));animation:dnShimmer 6.5s ease-in-out infinite}
+  .qsub{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+  @keyframes dnShimmer{0%,100%{background-position:0 0}50%{background-position:100% 0}}
+  @media (prefers-reduced-motion:reduce){.dayname{animation:none}}
   .xpnum{font-size:22px;font-weight:800}
   .goalctl{display:flex;align-items:center;gap:8px}
   .step{display:flex;flex-direction:column;gap:3px;margin-left:2px}
@@ -1281,7 +1287,7 @@ function homePaneHTML(){
   return `
   <div class="panel hero">
     <div class="herotop">
-      <span class="heroq"><b>${dayName}’s</b> quests</span>
+      <span class="heroq"><span class="dayname">${dayName}</span><span class="qsub">quests</span></span>
       <div class="goalctl"><span class="mono xpnum" style="color:${over?'var(--gold)':'var(--text)'}">${xp}</span>
         <span class="mono" style="font-size:12px;color:var(--muted)">/ ${U().dailyGoal}</span>
         <div class="step"><button data-g="dailyGoal:10">+</button><button data-g="dailyGoal:-10">−</button></div></div>
@@ -1712,7 +1718,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v24 · midnight-hud';
+const APP_VERSION='v26 · icon-check';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
