@@ -679,6 +679,11 @@ function rankInfo(v,tiers){v=Math.max(0,v||0);let passed=0;for(const t of tiers)
   const frac=next?(v-lo)/(hi-lo):1;const radiusFrac=(passed+(next?frac:0))/tiers.length;
   return{passed,cur,next,frac,radiusFrac,name:cur?cur.name:'—',color:cur?cur.c:'#57607A'};}
 const freshDay=d=>({date:d,done:{},side:[]});
+function archiveDay(u,day){if(!day||!day.date)return;u.dayLog=u.dayLog||{};
+  const tasks=(u.daily||[]).map(t=>({name:t.name,xp:t.xp,done:!!(day.done&&day.done[t.id])}));
+  const side=(day.side||[]).map(q=>({name:q.name,xp:q.xp,done:!!q.done}));
+  let xp=0;tasks.forEach(t=>{if(t.done)xp+=t.xp;});side.forEach(q=>{if(q.done)xp+=q.xp;});
+  u.dayLog[day.date]={tasks,side,xp};const ks=Object.keys(u.dayLog).sort();while(ks.length>10)delete u.dayLog[ks.shift()];}
 
 const GYM_VER=2;
 function defGym(){
@@ -718,7 +723,7 @@ function defUser(name,color){return{name,color,created:dstr(),completions:0,tier
   areaLabels:{markets:'Markets',health:'Health',knowledge:'Knowledge',business:'Business',productivity:'Productivity',consistency:'Consistency'},
   dailyGoal:150,weeklyGoal:150,totalXP:0,cleared:[],badges:{},today:freshDay(dstr()),
   history:{},weekly:{},areaXP:{markets:0,health:0,knowledge:0,business:0,productivity:0},
-  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}}};}
+  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}},dayLog:{}};}
 function defState(){return{currentUser:null,
   users:{matt:defUser('Matt','#F2B14C'),jerry:defUser('Jerry','#5AA9E6'),alexio:defUser('Alexio','#56C596'),d4:defUser('D4','#E8618C'),Frost:defUser('Frost','#67E8F9'),george:defUser('George','#B58CFF')},
   gym:defGym()};}
@@ -735,7 +740,7 @@ function normalizeUsers(){const defs=defState().users;for(const id in defs)if(!S
   for(const k in du)if(u[k]===undefined)u[k]=du[k];
   if(!u.areaLabels)u.areaLabels=du.areaLabels;
   if(!u.weeklyDefs||!u.weeklyDefs.length)u.weeklyDefs=WEEKLY.map(w=>Object.assign({},w));
-  if(!u.today||u.today.date!==dstr())u.today=freshDay(dstr());
+  if(!u.today||u.today.date!==dstr()){if(u.today&&u.today.date)archiveDay(u,u.today);u.today=freshDay(dstr());}
   gymMigrate(u);tierMigrate(u);}}
 function gymMigrate(u){if(u.gymWeekly)return;
   u.daily=(u.daily||[]).filter(t=>t.id!=='gym');
@@ -756,6 +761,9 @@ function dailyXP(){let x=0;for(const t of U().daily)if(U().today.done[t.id])x+=t
 function weekCounts(){const k=weekKey();return (U().weekly[k]&&U().weekly[k].counts)||{};}
 function weeklyXP(){const c=weekCounts();let x=0;for(const q of U().weeklyDefs)x+=Math.min(c[q.id]||0,q.target)*q.xp;return x;}
 function addArea(a,n){if(a&&a!=='consistency')U().areaXP[a]=(U().areaXP[a]||0)+n;}
+function awardAreas(t,amt){const a1=t.area||'productivity';
+  if(t.area2&&t.area2!==a1){const p=(t.split!=null?t.split:50)/100,x=Math.round(amt*p);addArea(a1,x);addArea(t.area2,amt-x);}
+  else addArea(a1,amt);}
 function areaValue(id){return id==='consistency'?U().cleared.length*60:Math.max(0,U().areaXP[id]||0);}
 
 function checkProgress(){
@@ -776,7 +784,7 @@ function checkProgress(){
 
 /* ================= actions ================= */
 function toggleDaily(id){if(!editGuard())return;const t=U().daily.find(c=>c.id===id),d=!U().today.done[id];
-  U().today.done[id]=d;U().totalXP+=d?t.xp:-t.xp;addArea(t.area,d?t.xp:-t.xp);U().completions=Math.max(0,(U().completions||0)+(d?1:-1));
+  U().today.done[id]=d;U().totalXP+=d?t.xp:-t.xp;awardAreas(t,d?t.xp:-t.xp);U().completions=Math.max(0,(U().completions||0)+(d?1:-1));
   if(d){try{navigator.vibrate&&navigator.vibrate(12);}catch(e){}}lastCheck=id;checkProgress();
   const core=U().daily.filter(c=>c.coreDaily);
   if(d&&core.length&&core.every(c=>U().today.done[c.id])&&!U().today.confetti){U().today.confetti=true;confettiBurst();}
@@ -787,9 +795,9 @@ function bumpWeekly(id,dir){if(!editGuard())return;const q=U().weeklyDefs.find(w
   if(nx===cur)return;U().weekly[k].counts[id]=nx;
   const delta=(Math.min(nx,q.target)-Math.min(cur,q.target))*q.xp;
   U().totalXP+=delta;addArea(q.area,delta);U().completions=Math.max(0,(U().completions||0)+dir);checkProgress();persist();render();}
-function toggleSide(id){if(!editGuard())return;const q=U().today.side.find(x=>x.id===id);U().totalXP+=q.done?-q.xp:q.xp;addArea('productivity',q.done?-q.xp:q.xp);U().completions=Math.max(0,(U().completions||0)+(q.done?-1:1));q.done=!q.done;checkProgress();persist();render();}
-function addSide(name,xp){if(!editGuard())return;name=name.trim();if(!name)return;U().today.side.push({id:'s'+Date.now(),name,xp,done:false});persist();render();}
-function delSide(id){if(!editGuard())return;const q=U().today.side.find(x=>x.id===id);if(q&&q.done){U().totalXP-=q.xp;addArea('productivity',-q.xp);}U().today.side=U().today.side.filter(x=>x.id!==id);checkProgress();persist();render();}
+function toggleSide(id){if(!editGuard())return;const q=U().today.side.find(x=>x.id===id);U().totalXP+=q.done?-q.xp:q.xp;awardAreas(q,q.done?-q.xp:q.xp);U().completions=Math.max(0,(U().completions||0)+(q.done?-1:1));q.done=!q.done;checkProgress();persist();render();}
+function addSide(name,xp,area){if(!editGuard())return;name=name.trim();if(!name)return;U().today.side.push({id:'s'+Date.now(),name,xp,area:area||'productivity',done:false});persist();render();}
+function delSide(id){if(!editGuard())return;const q=U().today.side.find(x=>x.id===id);if(q&&q.done){U().totalXP-=q.xp;awardAreas(q,-q.xp);}U().today.side=U().today.side.filter(x=>x.id!==id);checkProgress();persist();render();}
 function setGoal(k,dx){if(!editGuard())return;U()[k]=Math.max(50,U()[k]+dx);checkProgress();persist();render();}
 function go(r){route=r;window.scrollTo(0,0);render();}
 
@@ -807,6 +815,7 @@ function render(){
   else if(route.name==='editcore')renderEditCore(app);
   else if(route.name==='editweekly')renderEditWeekly(app);
   else if(route.name==='editstats')renderEditStats(app);
+  else if(route.name==='pastday')renderPastDay(app,route.date);
   else renderMain(app);
   requestAnimationFrame(()=>{try{
     saves.forEach(([sel,top])=>{const el=app.querySelector(sel);if(el)el.scrollTop=top;});
@@ -833,14 +842,18 @@ function renderEditCore(app){
   const u=U();
   app.innerHTML=`<div class="back" id="back">${svg(P.arrow,'class="ico"')} Back</div>
     <div class="dtitle">Edit ${u.name}’s core</div>
-    <div class="dsub">Set each task's tier — <b>Core</b> 50 (×1), <b>Important</b> 40 (×2), <b>Secondary</b> 20 (×3), <b>Little</b> 10 (∞).</div>${roBanner()}
+    <div class="dsub">Set each task's tier — <b>Core</b> 50 (×1), <b>Important</b> 40 (×2), <b>Secondary</b> 20 (×3), <b>Little</b> 10 (∞). Add an optional <b>2nd skill</b> and split the XP.</div>${roBanner()}
     ${u.daily.map((t,i)=>`<div class="panel card" style="padding:12px">
       <input class="ec-nm" data-i="${i}" value="${escapeHtml(t.name)}" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--text);font-size:14.5px;outline:none;margin-bottom:8px"/>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <select class="ec-tier" data-i="${i}" style="width:130px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--gold);font-family:var(--mono);font-size:11px;padding:9px;outline:none">${TIERS.map(T=>`<option value="${T.key}" ${tierOf(t.xp).key===T.key?'selected':''}>${T.label} · ${T.xp}</option>`).join('')}</select>
+        <span style="flex:1"></span>
+        <span class="del" data-ecdel="${i}">${svg(P.x)}</span></div>
       <div style="display:flex;gap:8px;align-items:center">
-        <select class="ec-tier" data-i="${i}" style="width:118px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--gold);font-family:var(--mono);font-size:11px;padding:9px;outline:none">${TIERS.map(T=>`<option value="${T.key}" ${tierOf(t.xp).key===T.key?'selected':''}>${T.label} · ${T.xp}</option>`).join('')}</select>
-        <select class="ec-area" data-i="${i}" style="flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12px;padding:9px;outline:none">${AREAS.filter(a=>a.id!=='consistency').map(a=>`<option value="${a.id}" ${t.area===a.id?'selected':''}>${escapeHtml(u.areaLabels[a.id]||a.name)}</option>`).join('')}</select>
-        <select class="ec-ic" data-i="${i}" style="background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12px;padding:9px;outline:none">${ICONS.map(ic=>`<option value="${ic}" ${t.ic===ic?'selected':''}>${ic}</option>`).join('')}</select>
-        <span class="del" data-ecdel="${i}">${svg(P.x)}</span></div></div>`).join('')}
+        <select class="ec-area" data-i="${i}" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--text);font-size:12.5px;padding:9px;outline:none">${AREAS.filter(a=>a.id!=='consistency').map(a=>`<option value="${a.id}" ${t.area===a.id?'selected':''}>${escapeHtml(u.areaLabels[a.id]||a.name)}</option>`).join('')}</select>
+        <select class="ec-area2" data-i="${i}" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12.5px;padding:9px;outline:none"><option value="">+ 2nd skill</option>${AREAS.filter(a=>a.id!=='consistency').map(a=>`<option value="${a.id}" ${t.area2===a.id?'selected':''}>${escapeHtml(u.areaLabels[a.id]||a.name)}</option>`).join('')}</select>
+      </div>
+      ${t.area2?`<div style="margin-top:8px"><div class="hint" style="margin-bottom:5px">Split — ${escapeHtml(u.areaLabels[t.area]||t.area)} / ${escapeHtml(u.areaLabels[t.area2]||t.area2)}</div><select class="ec-split" data-i="${i}" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--gold);font-family:var(--mono);font-size:12px;padding:9px;outline:none">${[90,80,70,60,50,40,30,20,10].map(pp=>`<option value="${pp}" ${(t.split!=null?t.split:50)===pp?'selected':''}>${pp} / ${100-pp}</option>`).join('')}</select></div>`:''}</div>`).join('')}
     <div class="panel card"><div class="mono" style="font-size:10px;color:var(--muted);margin-bottom:8px">Add task (starts as Little · 10)</div>
       <div class="addbar"><input id="ec_new" placeholder="New daily task…"/>
         <button id="ec_add">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div></div>`;
@@ -850,7 +863,8 @@ function renderEditCore(app){
     if(T.max!==Infinity&&tierCap(u.daily,key,i)>=T.max){toast('You can only give '+T.xp+' XP to '+T.max+' task'+(T.max>1?'s':''));render();return;}
     u.daily[i].xp=T.xp;persist();render();});
   app.querySelectorAll('.ec-area').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].area=e.value;persist();});
-  app.querySelectorAll('.ec-ic').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].ic=e.value;persist();});
+  app.querySelectorAll('.ec-area2').forEach(e=>e.onchange=()=>{if(!editGuard())return;const t=u.daily[+e.dataset.i];if(e.value){t.area2=e.value;if(t.split==null)t.split=50;}else{delete t.area2;delete t.split;}persist();render();});
+  app.querySelectorAll('.ec-split').forEach(e=>e.onchange=()=>{if(!editGuard())return;u.daily[+e.dataset.i].split=+e.value;persist();});
   app.querySelectorAll('[data-ecdel]').forEach(e=>e.onclick=()=>{if(!editGuard())return;u.daily.splice(+e.dataset.ecdel,1);persist();render();});
   const add=()=>{const nm=app.querySelector('#ec_new').value.trim();if(!nm)return;if(!editGuard())return;
     u.daily.push({id:'d'+Date.now(),name:nm,xp:10,cad:'daily',ic:'zap',area:'productivity',coreDaily:true});persist();render();};
@@ -1315,12 +1329,39 @@ function wireFinance(root){
   const add=root.querySelector('#fiAdd');if(add)add.onclick=()=>{if(!editGuard())return;const label=root.querySelector('#fiLabel').value.trim(),amt=cnum(root.querySelector('#fiAmt').value);if(!label||!amt){toast('Add a label and amount');return;}F().items=finItems().concat([{id:'m'+Date.now(),kind:root.querySelector('#fiKind').value,label,amount:amt,freq:root.querySelector('#fiFreq').value}]);persist();render();};
   root.querySelectorAll('[data-fidel]').forEach(e=>e.onclick=()=>{if(!editGuard())return;F().items=finItems().filter(x=>x.id!==e.dataset.fidel);persist();render();});
 }
+function pastRow(t){return `<div class="row" style="opacity:${t.done?1:.5}">
+    <div class="box${t.done?' on':''}" style="cursor:default">${svg(P.check,'class="ico" style="color:var(--bg)" stroke-width="3"')}</div>
+    <div class="rbody" style="cursor:default"><div class="t" style="text-decoration:none">${escapeHtml(t.name)}</div></div>
+    <span class="xp" style="color:${t.done?'var(--green)':'var(--muted)'}">${t.done?'+'+t.xp:'—'}</span></div>`;}
+function renderPastDay(app,date){
+  const u=U(),log=(u.dayLog&&u.dayLog[date])||null;
+  const dObj=new Date(date+'T00:00:00'),dayName=dObj.toLocaleDateString(undefined,{weekday:'long'}),nice=dObj.toLocaleDateString(undefined,{day:'numeric',month:'short'});
+  const min=shift(dstr(),-6),canOlder=date>min;
+  const xp=log?log.xp:(u.history[date]||0);
+  let body;
+  if(log){body=`<div class="seclabel"><span>Core · daily</span></div>
+      <div class="panel list">${log.tasks.length?log.tasks.map(pastRow).join(''):'<div class="hint" style="padding:12px">—</div>'}</div>`;
+    if(log.side&&log.side.length)body+=`<div class="seclabel"><span>Side quests · one-offs</span></div>
+      <div class="panel list">${log.side.map(pastRow).join('')}</div>`;
+  }else body=`<div class="panel card"><div class="hint">${u.history[date]!=null?'Only the XP total was recorded for this day.':'No activity was recorded for this day.'}</div></div>`;
+  app.innerHTML=`<div class="back" id="back">${svg(P.arrow,'class="ico"')} Back to today</div>
+    <div class="dtitle">${dayName} <span class="hint" style="font-weight:400">· ${nice}</span></div>
+    <div class="dsub">Read-only view · ${xp} XP earned that day</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn ghost" id="older" ${canOlder?'':'disabled'} style="flex:1;${canOlder?'':'opacity:.4'}">‹ Older</button>
+      <button class="btn ghost" id="newer" style="flex:1">Newer ›</button></div>
+    ${body}
+    <div class="hint" style="margin-top:16px;text-align:center">You can look back up to 7 days. Past days can't be edited.</div>`;
+  app.querySelector('#back').onclick=()=>{route={name:'home'};render();};
+  const ol=app.querySelector('#older');if(ol&&canOlder)ol.onclick=()=>{route={name:'pastday',date:shift(date,-1)};render();};
+  const nw=app.querySelector('#newer');if(nw)nw.onclick=()=>{const nd=shift(date,1);if(nd>=dstr())route={name:'home'};else route={name:'pastday',date:nd};render();};
+}
 function renderMain(app){
   const {lvl,into,cost}=levelOf(U().totalXP),streak=streakOf(U().cleared);
   const dayName=new Date().toLocaleDateString(undefined,{weekday:'long'});
   app.innerHTML=`
   <header>
-    <div><div class="eyebrow mono">Quest Log</div><div class="day mono">${dayName}</div></div>
+    <div data-daypick style="cursor:pointer"><div class="eyebrow mono">Quest Log</div><div class="day mono">${dayName} <span style="font-size:11px;color:var(--muted);-webkit-text-fill-color:var(--muted)">▾</span></div></div>
     <div class="chips">
       <div class="chip streak mono" style="color:${streak>0?'var(--gold)':'var(--muted)'}">${svg(P.flame,'class="ico"')}<span>${streak}</span></div>
       <div class="chip lvlwrap" data-profile style="cursor:pointer"><div class="lvltop"><span class="mono" style="font-size:9px;color:var(--violet)">LVL</span>
@@ -1362,6 +1403,7 @@ function renderMain(app){
   app.querySelectorAll('[data-top]').forEach(e=>e.onclick=()=>{tab=e.dataset.top;applyTab();setLeft(true);});
   let st;pager.onscroll=()=>{clearTimeout(st);st=setTimeout(()=>{const idx=Math.round(pager.scrollLeft/(pager.clientWidth+GAP));const nt=TABS[Math.max(0,Math.min(TABS.length-1,idx))];if(nt&&nt!==tab){tab=nt;applyTab();}},60);};
   const pf=app.querySelector('[data-profile]');if(pf)pf.onclick=()=>{profileOpen=true;render();};
+  const dpk=app.querySelector('[data-daypick]');if(dpk)dpk.onclick=()=>{route={name:'pastday',date:shift(dstr(),-1)};render();};
   const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};
   const ov=app.querySelector('#ov');if(ov){ov.onclick=e=>{if(e.target===ov){profileOpen=false;render();}};app.querySelector('#ovclose').onclick=()=>{profileOpen=false;render();};app.querySelectorAll('[data-switch]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.switch));
     const cs=app.querySelector('#cloudsave');if(cs)cs.onclick=async()=>{cs.textContent='↑ …';try{S.users[S.currentUser]._v=Date.now();const r=await sb.from('profiles').update({data:S.users[S.currentUser]}).eq('id',S.currentUser);if(r&&r.error){toast('save failed: '+r.error.message);}else{synced=true;dirty=false;toast('↑ Saved this device to cloud');}}catch(e){toast('save failed');}};
@@ -1396,11 +1438,13 @@ function homePaneHTML(){
   <div class="panel sq">
     ${U().today.side.map(q=>`<div class="sqrow${q.done?' done':''}">
       <div class="main" data-side="${q.id}"><div class="box${q.done?' on':''}">${svg(P.check,'class="ico" style="color:var(--bg)" stroke-width="3"')}</div>
-      <span class="t">${escapeHtml(q.name)}</span><span class="xp">+${q.xp}</span></div>
+      <span class="t">${escapeHtml(q.name)}</span><span class="c" style="flex-shrink:0;margin-right:2px">${escapeHtml(U().areaLabels[q.area||'productivity']||'')}</span><span class="xp">+${q.xp}</span></div>
       <span class="del" data-del="${q.id}">${svg(P.x)}</span></div>`).join('')}
     <div class="addbar"><input id="sqname" placeholder="Add a one-off task…"/>
       <select id="sqsize"><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option></select>
       <button id="sqadd">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div>
+    <div class="addbar" style="margin-top:8px"><span class="hint" style="align-self:center">Skill</span>
+      <select id="sqarea" style="max-width:none;flex:1">${AREAS.filter(a=>a.id!=='consistency').map(a=>`<option value="${a.id}" ${a.id==='productivity'?'selected':''}>${escapeHtml(U().areaLabels[a.id]||a.name)}</option>`).join('')}</select></div>
   </div>
   <div class="seclabel"><span>Stats · ranks</span><span class="edit" data-editstats>✎ edit</span></div>
   <div class="panel radar">${radarSVG()}
@@ -1426,7 +1470,7 @@ function wireHome(root){
   root.querySelectorAll('[data-g]').forEach(e=>e.onclick=()=>{const p=e.dataset.g.split(':');setGoal(p[0],+p[1]);});
   root.querySelectorAll('[data-side]').forEach(e=>e.onclick=()=>toggleSide(e.dataset.side));
   root.querySelectorAll('[data-del]').forEach(e=>e.onclick=()=>delSide(e.dataset.del));
-  const sqadd=()=>{addSide(root.querySelector('#sqname').value,Number(root.querySelector('#sqsize').value));};
+  const sqadd=()=>{addSide(root.querySelector('#sqname').value,Number(root.querySelector('#sqsize').value),root.querySelector('#sqarea').value);};
   root.querySelector('#sqadd').onclick=sqadd;
   root.querySelector('#sqname').onkeydown=e=>{if(e.key==='Enter')sqadd();};
   const ec=root.querySelector('[data-editcore]');if(ec)ec.onclick=()=>go({name:'editcore'});
@@ -1811,7 +1855,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v27 · food-fixes';
+const APP_VERSION='v28 · multiskill-daylog';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
