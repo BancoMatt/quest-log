@@ -393,6 +393,29 @@
   .mealopt.on,.wmode.on,.fs-btn.on,.scntab.on,.star.on{border-color:var(--accent);color:var(--accent)}
   .pk-card{background:linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, #fff 4%), var(--panel))}
   @media (prefers-reduced-motion: reduce){.barfill::after{display:none}.btn,.ttab,.barfill,.lvlfill{transition:none}}
+  /* macro split sliders */
+  .macros3{display:flex;gap:10px}
+  .macol{flex:1;text-align:center;background:var(--panel2);border-radius:12px;padding:12px 6px}
+  .mlab{font-size:11px;font-weight:700;letter-spacing:.02em}
+  .mpct{font-size:21px;margin-top:2px}
+  .mgr{font-size:11px;color:var(--muted);margin-top:1px}
+  .mslider{width:100%;margin-top:10px;accent-color:var(--mc,#F5B942)}
+  .mwarn{font-size:11.5px;color:#E6B357;margin-top:8px;line-height:1.45;padding-left:16px;position:relative}
+  .mwarn::before{content:"⚠";position:absolute;left:0;top:0}
+  /* results / generic modal */
+  .modal-ov{position:fixed;inset:0;background:rgba(6,7,12,.6);backdrop-filter:blur(3px);z-index:800;display:flex;align-items:flex-end;justify-content:center}
+  .modal-sheet{width:100%;max-width:520px;background:linear-gradient(180deg, color-mix(in srgb,var(--panel) 94%,#fff 5%), var(--panel));border:1px solid rgba(255,255,255,.09);border-radius:20px 20px 0 0;box-shadow:0 -20px 50px -20px rgba(0,0,0,.7);max-height:76vh;display:flex;flex-direction:column;animation:sheetup .22s ease}
+  @keyframes sheetup{from{transform:translateY(20px);opacity:.6}to{transform:none;opacity:1}}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+  .modal-x{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:14px;cursor:pointer}
+  .modal-scroll{overflow-y:auto;padding:8px 12px 18px;-webkit-overflow-scrolling:touch}
+  /* check pop + confetti */
+  .box.pop{animation:boxpop .34s cubic-bezier(.2,1.4,.5,1)}
+  @keyframes boxpop{0%{transform:scale(.72)}55%{transform:scale(1.2)}100%{transform:scale(1)}}
+  .confetti-wrap{position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden}
+  .confetti{position:absolute;top:-12vh;width:8px;height:13px;border-radius:2px;will-change:transform,opacity;animation:conffall 1.5s ease-out forwards}
+  @keyframes conffall{to{transform:translateY(120vh) rotate(680deg);opacity:0}}
+  @media (prefers-reduced-motion:reduce){.box.pop{animation:none}}
 </style>
 </head>
 <body>
@@ -700,7 +723,7 @@ function defState(){return{currentUser:null,
   users:{matt:defUser('Matt','#F2B14C'),jerry:defUser('Jerry','#5AA9E6'),alexio:defUser('Alexio','#56C596'),d4:defUser('D4','#E8618C'),Frost:defUser('Frost','#67E8F9'),george:defUser('George','#B58CFF')},
   gym:defGym()};}
 
-let S,route={name:'home'},tab='home',showWelcome=false,profileOpen=false;
+let S,route={name:'home'},tab='home',showWelcome=false,profileOpen=false,lastCheck=null;
 function U(){return S.users[S.currentUser];}
 function daysOn(c){if(!c)return 1;const a=new Date(c+'T00:00:00'),b=new Date(dstr()+'T00:00:00');return Math.max(1,Math.round((b-a)/86400000)+1);}
 function guessMus(name){name=(name||'').toLowerCase();const R=[['incline',['chest','shoulders']],['bench',['chest','triceps']],['chest',['chest']],['overhead',['shoulders','triceps']],['ohp',['shoulders','triceps']],['shoulder',['shoulders']],['lateral',['shoulders']],['pushdown',['triceps']],['tricep',['triceps']],['dip',['triceps','chest']],['romanian',['hamstrings','glutes']],['rdl',['hamstrings','glutes']],['deadlift',['back','hamstrings','glutes']],['pull-up',['back','biceps']],['pullup',['back','biceps']],['chin',['back','biceps']],['pulldown',['back','biceps']],['row',['back','biceps']],['lat',['back']],['curl',['biceps']],['bicep',['biceps']],['leg press',['quads','glutes']],['leg extension',['quads']],['leg curl',['hamstrings']],['lunge',['quads','glutes']],['squat',['quads','glutes']],['hip thrust',['glutes']],['glute',['glutes']],['hamstring',['hamstrings']],['calf',['calves']],['calves',['calves']],['crunch',['abs']],['plank',['abs']],['ab ',['abs']],['forearm',['forearms']],['wrist',['forearms']]];for(const[k,v]of R)if(name.includes(k))return v.slice();return[];}
@@ -753,7 +776,12 @@ function checkProgress(){
 
 /* ================= actions ================= */
 function toggleDaily(id){if(!editGuard())return;const t=U().daily.find(c=>c.id===id),d=!U().today.done[id];
-  U().today.done[id]=d;U().totalXP+=d?t.xp:-t.xp;addArea(t.area,d?t.xp:-t.xp);U().completions=Math.max(0,(U().completions||0)+(d?1:-1));checkProgress();persist();render();}
+  U().today.done[id]=d;U().totalXP+=d?t.xp:-t.xp;addArea(t.area,d?t.xp:-t.xp);U().completions=Math.max(0,(U().completions||0)+(d?1:-1));
+  if(d){try{navigator.vibrate&&navigator.vibrate(12);}catch(e){}}lastCheck=id;checkProgress();
+  const core=U().daily.filter(c=>c.coreDaily);
+  if(d&&core.length&&core.every(c=>U().today.done[c.id])&&!U().today.confetti){U().today.confetti=true;confettiBurst();}
+  persist();render();
+  if(lastCheck){const el=document.querySelector('[data-toggle="'+lastCheck+'"]');if(el)el.classList.add('pop');lastCheck=null;}}
 function bumpWeekly(id,dir){if(!editGuard())return;const q=U().weeklyDefs.find(w=>w.id===id);if(!q)return;const k=weekKey();
   U().weekly[k]=U().weekly[k]||{counts:{}};const cur=U().weekly[k].counts[id]||0,nx=Math.max(0,cur+dir);
   if(nx===cur)return;U().weekly[k].counts[id]=nx;
@@ -900,8 +928,64 @@ function foodNum(v){v=parseFloat(v);return isFinite(v)?v:0;}
 function foodDay(d){return (U().food&&U().food[d||dstr()])||[];}
 function foodTotals(d){const t={};foodDay(d).forEach(e=>{const f=(e.grams||0)/100;for(const k in e.n)t[k]=(t[k]||0)+(e.n[k]||0)*f;});
   for(const k in t)t[k]=Math.round(t[k]*10)/10;['kcal','protein','carbs','fat','fiber','sugars','satfat'].forEach(k=>{if(t[k]==null)t[k]=0;});return t;}
-function foodTargets(){const r=U().calc&&U().calc.report;if(!r)return null;
-  return {kcal:Math.round(r.target),protein:Math.round(r.protG),carbs:Math.round(r.carbG),fat:Math.round(r.fatG),fiber:r.fiber};}
+/* common whole-foods (per 100g: kcal,protein,carbs,fat,fiber) — searched first, works offline */
+const COMMON_FOODS=[
+ ['Egg (whole)',143,13,1.1,9.5,0],['Egg white',52,11,0.7,0.2,0],['Chicken breast',165,31,0,3.6,0],
+ ['Chicken thigh',209,26,0,11,0],['Beef mince 5%',170,26,0,7,0],['Beef steak',217,26,0,12,0],
+ ['Salmon',208,20,0,13,0],['Tuna (canned in water)',116,26,0,1,0],['Cod',105,23,0,0.9,0],
+ ['Shrimp',99,24,0.2,0.3,0],['Turkey breast',135,30,0,1,0],['Pork loin',143,26,0,4,0],
+ ['Whole milk',61,3.2,4.8,3.3,0],['Skim milk',34,3.4,5,0.1,0],['Greek yogurt (0%)',59,10,3.6,0.4,0],
+ ['Cheddar cheese',402,25,1.3,33,0],['Mozzarella',280,22,2.2,21,0],['Cottage cheese',98,11,3.4,4.3,0],
+ ['Butter',717,0.9,0.1,81,0],['Olive oil',884,0,0,100,0],['Whey protein',400,80,8,6,0],
+ ['White rice (cooked)',130,2.7,28,0.3,0.4],['Brown rice (cooked)',112,2.6,24,0.9,1.8],
+ ['Pasta (cooked)',158,5.8,31,0.9,1.8],['White bread',265,9,49,3.2,2.7],['Wholemeal bread',247,13,41,3.4,7],
+ ['Oats',389,17,66,7,10],['Potato (boiled)',87,1.9,20,0.1,1.8],['Sweet potato',86,1.6,20,0.1,3],
+ ['Quinoa (cooked)',120,4.4,21,1.9,2.8],['Corn',96,3.4,21,1.5,2.4],
+ ['Banana',89,1.1,23,0.3,2.6],['Apple',52,0.3,14,0.2,2.4],['Mango',60,0.8,15,0.4,1.6],
+ ['Orange',47,0.9,12,0.1,2.4],['Strawberries',32,0.7,7.7,0.3,2],['Blueberries',57,0.7,14,0.3,2.4],
+ ['Grapes',69,0.7,18,0.2,0.9],['Avocado',160,2,9,15,7],['Pineapple',50,0.5,13,0.1,1.4],
+ ['Broccoli',34,2.8,7,0.4,2.6],['Spinach',23,2.9,3.6,0.4,2.2],['Carrot',41,0.9,10,0.2,2.8],
+ ['Tomato',18,0.9,3.9,0.2,1.2],['Cucumber',15,0.7,3.6,0.1,0.5],['Bell pepper',31,1,6,0.3,2.1],
+ ['Almonds',579,21,22,50,12],['Peanut butter',588,25,20,50,6],['Walnuts',654,15,14,65,7],
+ ['Lentils (cooked)',116,9,20,0.4,8],['Chickpeas (cooked)',164,9,27,2.6,8],['Black beans (cooked)',132,8.9,24,0.5,8.7],
+ ['Tofu',76,8,1.9,4.8,0.3],['Honey',304,0.3,82,0,0],['Dark chocolate 70%',598,7.9,46,43,11]
+];
+function commonToItem(f){return {code:'',name:f[0],brand:'',serving:'',_generic:true,
+  n:{kcal:f[1],protein:f[2],carbs:f[3],fat:f[4],fiber:f[5]||0,sugars:0,satfat:0,sodium:0,potassium:0,calcium:0,iron:0,magnesium:0,zinc:0,phosphorus:0,vitc:0,vita:0,vitd:0,vitb6:0,vitb12:0,cholesterol:0}};}
+function searchCommon(q){q=(q||'').toLowerCase().trim();if(!q)return [];
+  return COMMON_FOODS.filter(f=>f[0].toLowerCase().includes(q))
+    .sort((a,b)=>((a[0].toLowerCase().startsWith(q)?0:1)-(b[0].toLowerCase().startsWith(q)?0:1))||a[0].length-b[0].length)
+    .map(commonToItem);}
+/* macro split */
+function round5(x){return Math.round(x/5)*5;}
+function getSplit(){const r=U().calc&&U().calc.report;if(!r)return {p:30,c:40,f:30};
+  if(r.split&&r.split.p)return r.split;
+  if(r.target&&(r.protG||r.carbG||r.fatG)){const k=r.target;let p=Math.round(r.protG*4/k*100),c=Math.round(r.carbG*4/k*100);return {p,c,f:Math.max(0,100-p-c)};}
+  return {p:30,c:40,f:30};}
+function setMacroPct(which,val){if(!editGuard())return;const r=U().calc&&U().calc.report;if(!r)return;
+  const s=Object.assign({p:30,c:40,f:30},getSplit());val=Math.max(5,Math.min(90,round5(val)));
+  const o=['p','c','f'].filter(x=>x!==which),remain=100-val,osum=s[o[0]]+s[o[1]];
+  if(osum<=0)s[o[0]]=round5(remain/2);else s[o[0]]=Math.max(5,round5(remain*s[o[0]]/osum));
+  s[o[1]]=Math.max(0,remain-s[o[0]]);s[which]=val;r.split=s;persist();render();}
+function macroSplitHTML(){const r=U().calc&&U().calc.report;if(!r||!r.target)return '';const s=getSplit(),k=Math.round(r.target);
+  const g=(pct,kpg)=>Math.round(k*pct/100/kpg);
+  const col=(key,label,pct,kpg,color)=>`<div class="macol"><div class="mlab" style="color:${color}">${label}</div><div class="mpct mono">${pct}%</div><div class="mgr mono">${g(pct,kpg)} g</div><input type="range" min="5" max="90" step="5" value="${pct}" data-macro="${key}" data-kpg="${kpg}" class="mslider" style="--mc:${color}" ${canEdit()?'':'disabled'}/></div>`;
+  let warn='';if(s.f<15)warn+='<div class="mwarn">Fats support hormones and brain function — going this low is not ideal.</div>';
+  if(s.p<20)warn+='<div class="mwarn">Protein preserves muscle — too low risks losing it, especially in a deficit.</div>';
+  if(s.c<15)warn+='<div class="mwarn">Very low carbs can sap training energy and focus.</div>';
+  return `<div class="seclabel"><span>Macro split</span><span class="r mono">${k} kcal fixed</span></div>
+   <div class="panel card"><div class="macros3">${col('p','Protein',s.p,4,'#FF7A5C')}${col('c','Carbs',s.c,4,'#5CE0E6')}${col('f','Fat',s.f,9,'#F5B942')}</div>
+   <div class="hint" style="margin-top:8px">Same ${k} kcal — drag to shift the split, grams update live.</div>${warn}</div>`;}
+/* results popup + confetti */
+function foodResultsOpen(){return (foodBusy||foodMsg||foodResults.length)&&!foodPending;}
+function foodResultsModalHTML(){return `<div class="modal-ov" id="frOv"><div class="modal-sheet"><div class="modal-head"><b>Results${foodResults.length?' · '+foodResults.length:''}</b><button class="modal-x" id="frClose">✕</button></div><div class="modal-scroll">${foodBusy?'<div class="hint" style="padding:14px 4px">Searching…</div>':''}${foodMsg&&!foodBusy?`<div class="hint" style="padding:14px 4px">${escapeHtml(foodMsg)}</div>`:''}${foodResults.map((p,i)=>foodResultHTML(p,i)).join('')}</div></div></div>`;}
+function closeResults(){foodResults=[];foodMsg='';foodBusy=false;render();}
+function confettiBurst(){try{if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;}catch(e){}
+  const wrap=document.createElement('div');wrap.className='confetti-wrap';const cols=['#F5B942','#4FD08A','#5CE0E6','#FF7A5C','#A98BFF','#7C93FF'];
+  for(let i=0;i<50;i++){const c=document.createElement('div');c.className='confetti';c.style.left=Math.random()*100+'vw';c.style.background=cols[i%cols.length];c.style.animationDelay=(Math.random()*0.25).toFixed(2)+'s';c.style.transform='rotate('+Math.floor(Math.random()*360)+'deg)';wrap.appendChild(c);}
+  document.body.appendChild(wrap);setTimeout(()=>{try{wrap.remove();}catch(e){}},1700);}
+function foodTargets(){const r=U().calc&&U().calc.report;if(!r)return null;const sp=getSplit(),k=Math.round(r.target);
+  return {kcal:k,protein:Math.round(k*sp.p/100/4),carbs:Math.round(k*sp.c/100/4),fat:Math.round(k*sp.f/100/9),fiber:r.fiber};}
 function mapOff(p){const n=p.nutriments||{};
   let kcal=foodNum(n['energy-kcal_100g']||n['energy-kcal_value']);
   if(!kcal){const kj=foodNum(n['energy-kj_100g'])||foodNum(n.energy_100g);if(kj)kcal=Math.round(kj/4.184);}
@@ -1000,6 +1084,7 @@ function foodPaneHTML(){
     <div class="micros">fiber ${t.fiber}g · sugars ${t.sugars}g · sat.fat ${t.satfat}g · sodium ${Math.round(t.sodium)}mg</div>
     ${tg?'':'<div class="hint" style="margin-top:8px">Fill in Body Calc to see targets & how much you have left.</div>'}</div>
   ${microsHTML(t)}
+  ${macroSplitHTML()}
   ${waterHTML()}
   <div class="seclabel"><span>Add food</span></div>
   <div class="panel card">
@@ -1010,27 +1095,33 @@ function foodPaneHTML(){
       <button class="fs-btn${foodBCopen?' on':''}" id="foodBCToggle" title="Enter barcode">${svg(P.barcode,'class="ico"')}</button>
     </div>
     ${foodBCopen?`<div class="addbar" style="margin-top:8px"><input id="foodBC" inputmode="numeric" placeholder="Barcode number…" ${canEdit()?'':'disabled'}/><button id="foodBCBtn">Look up</button></div>`:''}
-    ${foodBusy?'<div class="hint" style="margin-top:8px">Searching…</div>':''}
-    ${foodMsg&&!foodBusy?`<div class="hint" style="margin-top:8px">${escapeHtml(foodMsg)}</div>`:''}
-    <div id="foodResults">${foodResults.map((p,i)=>foodResultHTML(p,i)).join('')}</div>
+    <div class="hint" style="margin-top:8px">Search common foods (egg, mango, rice…) or scan a barcode for packaged items.</div>
   </div>
   <div class="seclabel"><span>Diary</span></div>
   ${diaryHTML()}
   ${weekKcalHTML()}
+  ${foodResultsOpen()?foodResultsModalHTML():''}
   ${foodPending?foodAddModalHTML():''}`;
 }
 function wireFood(root){
   const q=root.querySelector('#foodQ');
   const doSearch=async()=>{const term=(q&&q.value||'').trim();if(!term){foodMsg='Type something to search.';render();return;}
     if(!canEdit()){toast('Log in to edit');return;}
-    foodQ=term;foodBusy=true;foodMsg='';foodResults=[];render();
-    try{foodResults=await offSearch(term);foodMsg=foodResults.length?'':'No matches — try a simpler term or scan the barcode.';}
-    catch(e){foodMsg='Search failed — check your connection and try again.';}
+    foodQ=term;foodBusy=true;foodMsg='';foodResults=searchCommon(term);render();
+    try{const off=await offSearch(term);const seen=new Set(foodResults.map(x=>x.name.toLowerCase()));
+        foodResults=foodResults.concat(off.filter(x=>!seen.has(x.name.toLowerCase())));
+        foodMsg=foodResults.length?'':'No matches — try a simpler term or scan the barcode.';}
+    catch(e){foodMsg=foodResults.length?'':'Couldn\'t reach the food database — showing common foods only. Check your connection for packaged items.';}
     foodBusy=false;render();};
   const sb=root.querySelector('#foodScanBtn');
   if(q){q.onkeydown=e=>{if(e.key==='Enter')doSearch();};}
   const ico=root.querySelector('.fs-ico');if(ico)ico.onclick=doSearch;
   root.querySelectorAll('[data-fr]').forEach(e=>e.onclick=()=>{const p=foodResults[+e.dataset.fr];if(p){foodPending=p;render();}});
+  const frc=root.querySelector('#frClose');if(frc)frc.onclick=closeResults;
+  const frov=root.querySelector('#frOv');if(frov)frov.onclick=e=>{if(e.target===frov)closeResults();};
+  root.querySelectorAll('[data-macro]').forEach(e=>{
+    e.oninput=()=>{const col=e.closest('.macol'),pct=+e.value,r=U().calc&&U().calc.report;col.querySelector('.mpct').textContent=pct+'%';if(r&&r.target)col.querySelector('.mgr').textContent=Math.round(r.target*pct/100/(+e.dataset.kpg))+' g';};
+    e.onchange=()=>setMacroPct(e.dataset.macro,+e.value);});
   const bct=root.querySelector('#foodBCToggle');if(bct)bct.onclick=()=>{foodBCopen=!foodBCopen;render();};
   const bc=root.querySelector('#foodBC'),bcb=root.querySelector('#foodBCBtn');
   const doBC=async(code)=>{code=(code||'').replace(/\D/g,'');if(!code){foodMsg='Enter a barcode number.';render();return;}
@@ -1186,8 +1277,10 @@ function finInvestHTML(inv){
    <div class="hint" style="margin-top:6px">Never withdrawing — pure compounding. Shaded band = if markets do ±2.5%/yr better or worse. ~7–8%/yr is a common long-run S&P assumption; nothing is guaranteed.</div>`;}
 function financePaneHTML(){const F=U().finance||{};const flow=finFlow();const inv=F.invest||{},goal=F.goal||{};
   const initial=cnum(inv.initial),pm=cnum(inv.monthly),rate=inv.rate!=null?cnum(inv.rate):7;const years=[5,10,15,20];
+  const oneoff=finItems().reduce((a,it)=>a+(it.freq==='once'?(it.kind==='in'?it.amount:-it.amount):0),0);
+  const nw=cnum(F.networth)+oneoff;
   return `<div class="seclabel"><span>Net worth</span></div>
-   <div class="panel card fin-nw"><div class="nw-big mono">€${n0(cnum(F.networth))}</div>
+   <div class="panel card fin-nw"><div class="nw-big mono">€${n0(nw)}</div>${oneoff?`<div class="hint" style="margin-top:2px">base €${n0(cnum(F.networth))} ${oneoff>=0?'+':'−'} €${n0(Math.abs(oneoff))} one-off entries</div>`:''}
      <div class="addbar" style="margin-top:8px"><span class="hint" style="align-self:center">Set</span><input id="fnw" inputmode="decimal" value="${F.networth||''}" placeholder="your net worth (€)" ${canEdit()?'':'disabled'}/></div>
      <div class="flowrow"><div><span class="hint">Income</span><b class="mono" style="color:#56C596">+€${n0(flow.inc)}</b></div>
        <div><span class="hint">Expenses</span><b class="mono" style="color:#e06c75">−€${n0(flow.exp)}</b></div>
@@ -1718,7 +1811,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v26 · icon-check';
+const APP_VERSION='v27 · food-fixes';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
