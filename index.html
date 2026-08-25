@@ -416,6 +416,19 @@
   .confetti{position:absolute;top:-12vh;width:8px;height:13px;border-radius:2px;will-change:transform,opacity;animation:conffall 1.5s ease-out forwards}
   @keyframes conffall{to{transform:translateY(120vh) rotate(680deg);opacity:0}}
   @media (prefers-reduced-motion:reduce){.box.pop{animation:none}}
+  .gradebadge{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;padding:2px 5px;border-radius:5px;border:1px solid;margin-left:6px;vertical-align:1px;white-space:nowrap}
+  .graderow{display:flex;align-items:center;gap:8px;margin-top:10px}
+  .recentrow{display:flex;align-items:center;gap:10px;padding:9px 2px;border-top:1px solid var(--line);cursor:pointer}
+  .recentwrap .recentrow:first-of-type{border-top:1px solid var(--line)}
+  .delc{background:rgba(224,108,117,.15);border:1px solid #e06c75;color:#e06c75;border-radius:8px;font-size:11px;font-family:var(--mono);letter-spacing:.06em;padding:6px 11px;cursor:pointer;flex-shrink:0}
+  .streak{cursor:pointer}
+  .streak.shake{animation:stkshake .5s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes stkshake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-3px)}40%,60%{transform:translateX(3px)}}
+  .streak.spark{animation:stkspark .42s ease}
+  @keyframes stkspark{0%{transform:scale(1)}45%{transform:scale(1.22);filter:drop-shadow(0 0 7px var(--gold))}100%{transform:scale(1)}}
+  .fpart{position:fixed;z-index:9999;pointer-events:none;font-size:16px;transform:translate(-50%,-50%);animation:fpart .85s ease-out forwards}
+  @keyframes fpart{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.15)}}
+  @media (prefers-reduced-motion:reduce){.streak.shake,.streak.spark{animation:none}}
 </style>
 </head>
 <body>
@@ -723,7 +736,7 @@ function defUser(name,color){return{name,color,created:dstr(),completions:0,tier
   areaLabels:{markets:'Markets',health:'Health',knowledge:'Knowledge',business:'Business',productivity:'Productivity',consistency:'Consistency'},
   dailyGoal:150,weeklyGoal:150,totalXP:0,cleared:[],badges:{},today:freshDay(dstr()),
   history:{},weekly:{},areaXP:{markets:0,health:0,knowledge:0,business:0,productivity:0},
-  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}},dayLog:{}};}
+  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}},dayLog:{},foodRecent:[]};}
 function defState(){return{currentUser:null,
   users:{matt:defUser('Matt','#F2B14C'),jerry:defUser('Jerry','#5AA9E6'),alexio:defUser('Alexio','#56C596'),d4:defUser('D4','#E8618C'),Frost:defUser('Frost','#67E8F9'),george:defUser('George','#B58CFF')},
   gym:defGym()};}
@@ -934,7 +947,7 @@ function sizePager(){const pg=document.getElementById('pager');if(!pg)return;
   const top=pg.getBoundingClientRect().top;const h=Math.max(240,window.innerHeight-top-16);pg.style.height=h+'px';}
 
 /* ================= food tracker (Open Food Facts) ================= */
-let foodResults=[], foodPending=null, foodBusy=false, foodMsg='', foodQ='', foodBCopen=false, foodMeal=null, weightMode='D';
+let foodResults=[], foodPending=null, foodBusy=false, foodMsg='', foodQ='', foodBCopen=false, foodMeal=null, weightMode='D', foodDelConfirm=null, foodEditId=null;
 const MEALS=[['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snacks','Snacks']];
 function defaultMeal(){const h=new Date().getHours();return h<11?'breakfast':h<15?'lunch':h<18?'snacks':h<22?'dinner':'snacks';}
 const MICROS=[['sodium','Sodium','mg'],['potassium','Potassium','mg'],['calcium','Calcium','mg'],['iron','Iron','mg'],['magnesium','Magnesium','mg'],['zinc','Zinc','mg'],['phosphorus','Phosphorus','mg'],['vitc','Vitamin C','mg'],['vita','Vitamin A','µg'],['vitd','Vitamin D','µg'],['vitb6','Vitamin B6','mg'],['vitb12','Vitamin B12','µg'],['cholesterol','Cholesterol','mg']];
@@ -964,7 +977,7 @@ const COMMON_FOODS=[
  ['Lentils (cooked)',116,9,20,0.4,8],['Chickpeas (cooked)',164,9,27,2.6,8],['Black beans (cooked)',132,8.9,24,0.5,8.7],
  ['Tofu',76,8,1.9,4.8,0.3],['Honey',304,0.3,82,0,0],['Dark chocolate 70%',598,7.9,46,43,11]
 ];
-function commonToItem(f){return {code:'',name:f[0],brand:'',serving:'',_generic:true,
+function commonToItem(f){return {code:'',name:f[0],brand:'',serving:'',_generic:true,ing:f[0].toLowerCase(),additives:[],nova:1,
   n:{kcal:f[1],protein:f[2],carbs:f[3],fat:f[4],fiber:f[5]||0,sugars:0,satfat:0,sodium:0,potassium:0,calcium:0,iron:0,magnesium:0,zinc:0,phosphorus:0,vitc:0,vita:0,vitd:0,vitb6:0,vitb12:0,cholesterol:0}};}
 function searchCommon(q){q=(q||'').toLowerCase().trim();if(!q)return [];
   return COMMON_FOODS.filter(f=>f[0].toLowerCase().includes(q))
@@ -994,12 +1007,46 @@ function macroSplitHTML(){const r=U().calc&&U().calc.report;if(!r||!r.target)ret
 function foodResultsOpen(){return (foodBusy||foodMsg||foodResults.length)&&!foodPending;}
 function foodResultsModalHTML(){return `<div class="modal-ov" id="frOv"><div class="modal-sheet"><div class="modal-head"><b>Results${foodResults.length?' · '+foodResults.length:''}</b><button class="modal-x" id="frClose">✕</button></div><div class="modal-scroll">${foodBusy?'<div class="hint" style="padding:14px 4px">Searching…</div>':''}${foodMsg&&!foodBusy?`<div class="hint" style="padding:14px 4px">${escapeHtml(foodMsg)}</div>`:''}${foodResults.map((p,i)=>foodResultHTML(p,i)).join('')}</div></div></div>`;}
 function closeResults(){foodResults=[];foodMsg='';foodBusy=false;render();}
+let _stkN=0,_stkT;
+function fireParticles(el,n){const r=el.getBoundingClientRect(),emo=['🔥','✨','🔥'];
+  for(let i=0;i<n;i++){const s=document.createElement('div');s.className='fpart';s.textContent=emo[i%emo.length];
+    s.style.left=(r.left+r.width/2)+'px';s.style.top=(r.top+r.height/2)+'px';
+    s.style.setProperty('--dx',((Math.random()-0.5)*90).toFixed(0)+'px');s.style.setProperty('--dy',(-40-Math.random()*70).toFixed(0)+'px');
+    s.style.animationDelay=(Math.random()*0.1).toFixed(2)+'s';document.body.appendChild(s);setTimeout(()=>{try{s.remove();}catch(e){}},900);}}
+function streakPoke(el,streak){clearTimeout(_stkT);_stkN++;_stkT=setTimeout(()=>_stkN=0,900);
+  let rm=false;try{rm=matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){}
+  if(streak<=0){el.classList.remove('shake');void el.offsetWidth;el.classList.add('shake');
+    el.style.color=_stkN>2?'#E8873A':'#C77B45';setTimeout(()=>{el.style.color='';},650);
+    try{navigator.vibrate&&navigator.vibrate(6);}catch(e){}}
+  else{try{navigator.vibrate&&navigator.vibrate(_stkN>2?[8,18,8,18,8]:12);}catch(e){}
+    el.classList.remove('spark');void el.offsetWidth;el.classList.add('spark');
+    if(!rm)fireParticles(el,_stkN>2?12:4);}}
 function confettiBurst(){try{if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;}catch(e){}
   const wrap=document.createElement('div');wrap.className='confetti-wrap';const cols=['#F5B942','#4FD08A','#5CE0E6','#FF7A5C','#A98BFF','#7C93FF'];
   for(let i=0;i<50;i++){const c=document.createElement('div');c.className='confetti';c.style.left=Math.random()*100+'vw';c.style.background=cols[i%cols.length];c.style.animationDelay=(Math.random()*0.25).toFixed(2)+'s';c.style.transform='rotate('+Math.floor(Math.random()*360)+'deg)';wrap.appendChild(c);}
   document.body.appendChild(wrap);setTimeout(()=>{try{wrap.remove();}catch(e){}},1700);}
 function foodTargets(){const r=U().calc&&U().calc.report;if(!r)return null;const sp=getSplit(),k=Math.round(r.target);
   return {kcal:k,protein:Math.round(k*sp.p/100/4),carbs:Math.round(k*sp.c/100/4),fat:Math.round(k*sp.f/100/9),fiber:r.fiber};}
+/* ===== Good / Mid / Bad ingredient engine ===== */
+const OIL_OK=['olive','coconut','avocado'];
+const BAD_KEY=['sunflower oil','rapeseed','canola','soybean oil','soya oil','soy oil','corn oil','cottonseed','grapeseed oil','vegetable oil','vegetal oil','seed oil','palm oil','palm kernel','palm fat','hydrogenated','partially hydrogenated','margarine','shortening','strutto','lard','tallow','glucose-fructose','glucose fructose','high fructose','high-fructose','corn syrup','glucose syrup','fructose syrup','invert sugar','aspartame','acesulfame','sucralose','saccharin','cyclamate','neotame','sodium nitrite','sodium nitrate','potassium nitrate','bha','bht','carrageenan','monosodium glutamate','artificial flavour','artificial flavor','artificial colour','artificial color','artificial sweetener'];
+const MID_KEY=['sugar','cane sugar','brown sugar','dextrose','maltodextrin','modified starch','syrup','natural flavour','natural flavor','flavouring','flavoring','citric acid','malic acid','lactic acid','acidity regulator','yeast extract','lecithin','emulsifier','stabiliser','stabilizer','thickener','pectin','guar gum','xanthan','preservative','antioxidant','dextrin'];
+const BAD_E=new Set(['e102','e104','e110','e120','e122','e123','e124','e127','e129','e131','e132','e133','e142','e150c','e150d','e151','e154','e155','e171','e173','e180','e210','e211','e212','e213','e214','e215','e218','e219','e220','e221','e222','e223','e224','e226','e227','e228','e249','e250','e251','e252','e320','e321','e407','e621','e622','e623','e624','e625','e627','e631','e635','e924','e925','e926','e928','e950','e951','e952','e954','e955','e962']);
+function foodGrade(item){if(!item)return null;
+  const text=(item.ing||'').toLowerCase(),adds=item.additives||[],nova=item.nova||null;
+  const bad=[],mid=[];
+  BAD_KEY.forEach(k=>{if(text.includes(k))bad.push(k);});
+  MID_KEY.forEach(k=>{if(text.includes(k))mid.push(k);});
+  adds.forEach(a=>{a=String(a).toLowerCase().replace(/^en:/,'');if(BAD_E.has(a))bad.push(a.toUpperCase());else if(/^e\d/.test(a))mid.push(a.toUpperCase());});
+  if(nova===4)bad.push('ultra-processed');else if(nova===3)mid.push('processed');
+  const parts=text?text.split(/,|;|\(|\)|\./).map(s=>s.trim()).filter(Boolean):[];
+  if(parts.length>6)mid.push(parts.length+' ingredients');
+  let grade;
+  if(!text&&!adds.length&&!nova)grade='unknown';
+  else if(bad.length)grade='bad';else if(mid.length)grade='mid';else grade='good';
+  return {grade,reasons:{bad:[...new Set(bad)],mid:[...new Set(mid)]}};}
+function gradeBadge(g){if(!g||g==='unknown')return '';const m={good:['GOOD','#4FD08A'],mid:['MID','#E6B357'],bad:['BAD','#e06c75']}[g];if(!m)return '';
+  return `<span class="gradebadge" style="color:${m[1]};border-color:${m[1]}66;background:${m[1]}1a">${m[0]}</span>`;}
 function mapOff(p){const n=p.nutriments||{};
   let kcal=foodNum(n['energy-kcal_100g']||n['energy-kcal_value']);
   if(!kcal){const kj=foodNum(n['energy-kj_100g'])||foodNum(n.energy_100g);if(kj)kcal=Math.round(kj/4.184);}
@@ -1008,6 +1055,7 @@ function mapOff(p){const n=p.nutriments||{};
   const mg=x=>Math.round(foodNum(x)*1000*10)/10, ug=x=>Math.round(foodNum(x)*1e6*10)/10;
   return {code:p.code||'',name:(p.product_name||p.product_name_en||p.generic_name||'').trim()||'Unnamed product',
     brand:((p.brands||'').split(',')[0]||'').trim(),serving:p.serving_size||'',
+    ing:(p.ingredients_text||p.ingredients_text_en||'').toLowerCase(),additives:(p.additives_tags||[]),nova:p.nova_group||null,
     n:{kcal:Math.round(kcal),protein:gv('proteins'),carbs:gv('carbohydrates'),fat:gv('fat'),
        fiber:gv('fiber'),sugars:gv('sugars'),satfat:gv('saturated-fat'),
        sodium:mg(sodium),potassium:mg(gv('potassium')),calcium:mg(gv('calcium')),iron:mg(gv('iron')),
@@ -1015,7 +1063,7 @@ function mapOff(p){const n=p.nutriments||{};
        vitc:mg(gv('vitamin-c')),vita:ug(gv('vitamin-a')),vitd:ug(gv('vitamin-d')),
        vitb6:mg(gv('vitamin-b6')),vitb12:ug(gv('vitamin-b12')),cholesterol:mg(gv('cholesterol'))}};}
 function hasFood(p){return p.name&&(p.n.kcal>0||p.n.protein>0||p.n.carbs>0||p.n.fat>0);}
-const FOOD_FIELDS='code,product_name,product_name_en,generic_name,brands,nutriments,serving_size';
+const FOOD_FIELDS='code,product_name,product_name_en,generic_name,brands,nutriments,serving_size,ingredients_text,ingredients_text_en,additives_tags,nova_group';
 async function foodApi(params){
   const isBC=params.barcode!=null;
   const qs=isBC?('barcode='+encodeURIComponent(params.barcode)):('q='+encodeURIComponent(params.q));
@@ -1035,8 +1083,25 @@ async function offBarcode(code){const j=await foodApi({barcode:String(code).repl
   const p=j&&j.product;if(!p||!(p.product_name||p.product_name_en||p.nutriments))return null;return mapOff(p);}
 function servingGrams(item){const m=(item.serving||'').match(/([\d.]+)\s*g/);return m?Math.round(parseFloat(m[1]))||100:100;}
 function addFood(item,grams,meal){if(!editGuard())return;const d=dstr();U().food=U().food||{};U().food[d]=U().food[d]||[];
-  U().food[d].push({id:'f'+Date.now(),name:item.name,brand:item.brand,grams:Math.max(1,Math.round(grams))||100,n:item.n,meal:meal||foodMeal||defaultMeal()});
-  foodPending=null;foodResults=[];foodQ='';foodMsg='';persist();render();}
+  const grade=(foodGrade(item)||{}).grade;
+  U().food[d].push({id:'f'+Date.now(),name:item.name,brand:item.brand,grams:Math.max(1,Math.round(grams))||100,n:item.n,meal:meal||foodMeal||defaultMeal(),grade});
+  U().foodRecent=(U().foodRecent||[]).filter(x=>x.name.toLowerCase()!==(item.name||'').toLowerCase());
+  U().foodRecent.unshift({name:item.name,brand:item.brand,serving:item.serving,n:item.n,ing:item.ing,additives:item.additives,nova:item.nova,grade});
+  U().foodRecent=U().foodRecent.slice(0,12);
+  foodPending=null;foodResults=[];foodQ='';foodMsg='';foodDelConfirm=null;persist();render();}
+function findEntry(id){return ((U().food&&U().food[dstr()])||[]).find(e=>e.id===id);}
+function updateFoodGrams(id,grams){if(!editGuard())return;const e=findEntry(id);if(!e)return;e.grams=Math.max(1,Math.round(grams))||e.grams;persist();render();}
+function recentFoodsHTML(){const r=(U().foodRecent||[]);if(!r.length||foodQ)return '';
+  return `<div class="recentwrap"><div class="hint" style="margin:12px 0 4px">Recent · tap to add again</div>
+    ${r.slice(0,10).map((it,i)=>`<div class="recentrow" data-frq="${i}"><div style="flex:1;min-width:0"><div class="fr-nm">${escapeHtml(it.name)}${gradeBadge(it.grade)}</div><div class="fr-sub mono">${Math.round(it.n.kcal)} kcal/100g</div></div><span class="fr-add">${svg(P.plus,'class="ico" style="width:18px;height:18px"')}</span></div>`).join('')}</div>`;}
+function foodEditModalHTML(){const e=findEntry(foodEditId);if(!e)return '';const f=e.grams/100;
+  return `<div class="overlay" id="feov"><div class="sheet" style="max-width:340px">
+    <div class="dtitle" style="font-size:18px">${escapeHtml(e.name)}</div>
+    <div class="dsub">${Math.round(e.n.kcal)} kcal/100g · edit how much you ate</div>
+    <div class="addbar" style="margin-top:10px"><input id="feGrams" inputmode="numeric" value="${e.grams}" style="max-width:110px;text-align:center"/><span class="hint" style="align-self:center">grams</span></div>
+    <div class="hint" style="margin-top:8px">currently ${Math.round(e.n.kcal*f)} kcal</div>
+    <div style="display:flex;gap:8px;margin-top:14px"><button class="btn ghost" id="feCancel" style="flex:1">Cancel</button><button class="btn" id="feSave" style="flex:1">Save</button></div>
+  </div></div>`;}
 function removeFood(id){if(!editGuard())return;const d=dstr();U().food[d]=(U().food[d]||[]).filter(e=>e.id!==id);persist();render();}
 function addWater(ml){if(!editGuard())return;U().water=U().water||{};const d=dstr();U().water[d]=Math.max(0,Math.round((U().water[d]||0)+ml));persist();render();}
 function logWeight(kg){if(!editGuard())return;kg=Math.round(cnum(kg)*10)/10;if(!kg){toast('Enter a weight');return;}U().weight=U().weight||{};U().weight[dstr()]=kg;persist();render();}
@@ -1049,17 +1114,18 @@ function macroBar(label,val,tgt,color){const pct=tgt?Math.min(100,Math.round(val
   return `<div class="mb"><div class="mb-top"><span>${label}</span><span class="mono">${val}${tgt?' / '+tgt:''} g</span></div>
     <div class="mb-track"><div class="mb-fill" style="width:${pct}%;background:${color}"></div></div></div>`;}
 function foodResultHTML(p,i){return `<div class="foodres" data-fr="${i}">
-  <div style="flex:1;min-width:0"><div class="fr-nm">${escapeHtml(p.name)}${p.brand?` <span class="hint">· ${escapeHtml(p.brand)}</span>`:''}</div>
+  <div style="flex:1;min-width:0"><div class="fr-nm">${escapeHtml(p.name)}${gradeBadge((foodGrade(p)||{}).grade)}${p.brand?` <span class="hint">· ${escapeHtml(p.brand)}</span>`:''}</div>
     <div class="fr-sub mono">${Math.round(p.n.kcal)} kcal · P${Math.round(p.n.protein)} C${Math.round(p.n.carbs)} F${Math.round(p.n.fat)} <span class="hint">/100g</span></div></div>
   <span class="fr-add">${svg(P.plus,'class="ico" style="width:18px;height:18px"')}</span></div>`;}
-function foodEntryHTML(e){const f=e.grams/100;
-  return `<div class="row foodentry"><div class="rbody"><div class="fr-nm">${escapeHtml(e.name)}${e.brand?` <span class="hint">· ${escapeHtml(e.brand)}</span>`:''}</div>
-    <div class="fr-sub mono">${e.grams}g · ${Math.round(e.n.kcal*f)} kcal · P${Math.round(e.n.protein*f)} C${Math.round(e.n.carbs*f)} F${Math.round(e.n.fat*f)}</div></div>
-    <span class="del" data-fdel="${e.id}">${svg(P.x)}</span></div>`;}
+function foodEntryHTML(e){const f=e.grams/100;const confirming=foodDelConfirm===e.id;
+  return `<div class="row foodentry"><div class="rbody" data-fedit="${e.id}"><div class="fr-nm">${escapeHtml(e.name)}${gradeBadge(e.grade)}${e.brand?` <span class="hint">· ${escapeHtml(e.brand)}</span>`:''}</div>
+    <div class="fr-sub mono">${e.grams}g · ${Math.round(e.n.kcal*f)} kcal · P${Math.round(e.n.protein*f)} C${Math.round(e.n.carbs*f)} F${Math.round(e.n.fat*f)} <span class="hint">· tap to edit</span></div></div>
+    ${confirming?`<button class="delc" data-fdel="${e.id}">Remove?</button><span class="del" data-fcancel="${e.id}">${svg(P.x)}</span>`:`<span class="del" data-fdel="${e.id}">${svg(P.x)}</span>`}</div>`;}
 function foodAddModalHTML(){const it=foodPending,g=servingGrams(it);const sel=foodMeal||defaultMeal();
   return `<div class="overlay" id="fov"><div class="sheet" style="max-width:360px">
     <div class="dtitle" style="font-size:18px">${escapeHtml(it.name)}</div>
     <div class="dsub">${it.brand?escapeHtml(it.brand)+' · ':''}${Math.round(it.n.kcal)} kcal/100g · P${Math.round(it.n.protein)} C${Math.round(it.n.carbs)} F${Math.round(it.n.fat)}</div>
+    ${(function(){const gr=foodGrade(it);if(!gr||gr.grade==='unknown')return '';const rs=gr.grade==='good'?'whole-food ingredients, nothing nasty':[...gr.reasons.bad,...gr.reasons.mid].slice(0,4).join(', ');return `<div class="graderow">${gradeBadge(gr.grade)}<span class="hint">${gr.grade==='good'?'clean · '+rs:'contains: '+rs}</span></div>`;})()}
     <div class="mealpick">${MEALS.map(([k,lab])=>`<button class="mealopt${sel===k?' on':''}" data-meal="${k}">${lab}</button>`).join('')}</div>
     <div class="addbar" style="margin-top:10px"><input id="fgrams" inputmode="numeric" value="${g}" style="max-width:90px;text-align:center"/><span class="hint" style="align-self:center">grams</span></div>
     <div style="display:flex;gap:8px;margin-top:14px"><button class="btn ghost" id="fcancel" style="flex:1">Cancel</button><button class="btn" id="fadd" style="flex:1">Add</button></div>
@@ -1110,12 +1176,14 @@ function foodPaneHTML(){
     </div>
     ${foodBCopen?`<div class="addbar" style="margin-top:8px"><input id="foodBC" inputmode="numeric" placeholder="Barcode number…" ${canEdit()?'':'disabled'}/><button id="foodBCBtn">Look up</button></div>`:''}
     <div class="hint" style="margin-top:8px">Search common foods (egg, mango, rice…) or scan a barcode for packaged items.</div>
+    ${recentFoodsHTML()}
   </div>
   <div class="seclabel"><span>Diary</span></div>
   ${diaryHTML()}
   ${weekKcalHTML()}
   ${foodResultsOpen()?foodResultsModalHTML():''}
-  ${foodPending?foodAddModalHTML():''}`;
+  ${foodPending?foodAddModalHTML():''}
+  ${foodEditId?foodEditModalHTML():''}`;
 }
 function wireFood(root){
   const q=root.querySelector('#foodQ');
@@ -1149,7 +1217,14 @@ function wireFood(root){
   if(sb)sb.onclick=()=>startScan(it=>{foodPending=it;foodMsg='';render();});
   root.querySelectorAll('[data-micacc]').forEach(h=>h.onclick=()=>h.closest('.acc').classList.toggle('open'));
   root.querySelectorAll('[data-water]').forEach(e=>e.onclick=()=>addWater(+e.dataset.water));
-  root.querySelectorAll('[data-fdel]').forEach(e=>e.onclick=()=>removeFood(e.dataset.fdel));
+  root.querySelectorAll('[data-fdel]').forEach(e=>e.onclick=()=>{const id=e.dataset.fdel;if(foodDelConfirm===id){foodDelConfirm=null;removeFood(id);}else{foodDelConfirm=id;render();}});
+  root.querySelectorAll('[data-fcancel]').forEach(e=>e.onclick=()=>{foodDelConfirm=null;render();});
+  root.querySelectorAll('[data-fedit]').forEach(e=>e.onclick=()=>{if(!canEdit()){toast('Log in to edit');return;}foodEditId=e.dataset.fedit;render();});
+  root.querySelectorAll('[data-frq]').forEach(e=>e.onclick=()=>{const it=(U().foodRecent||[])[+e.dataset.frq];if(it){foodPending=it;render();}});
+  const feov=root.querySelector('#feov');
+  if(feov){root.querySelector('#feSave').onclick=()=>{const id=foodEditId,g=foodNum(root.querySelector('#feGrams').value);foodEditId=null;updateFoodGrams(id,g);};
+    root.querySelector('#feCancel').onclick=()=>{foodEditId=null;render();};
+    feov.onclick=e=>{if(e.target===feov){foodEditId=null;render();}};}
   const fov=root.querySelector('#fov');
   if(fov){root.querySelectorAll('[data-meal]').forEach(e=>e.onclick=()=>{foodMeal=e.dataset.meal;render();});
     const add=()=>{const g=foodNum(root.querySelector('#fgrams').value)||servingGrams(foodPending);addFood(foodPending,g,foodMeal||defaultMeal());};
@@ -1178,7 +1253,11 @@ async function startScan(finish){
     status.innerHTML='<div class="spin"></div><div class="scanmsg">Checking '+code+'…</div>';
     let item=null;try{const[it]=await Promise.all([offBarcode(code),delay(1400)]);item=it;}catch(e){item=null;}
     if(done)return;
-    if(item){status.innerHTML='<div class="scanok">✓</div><div class="scanmsg ok">PRODUCT FOUND</div>';await delay(850);if(done)return;cleanup();finish(item);}
+    if(item){const gr=foodGrade(item),gv=gr&&gr.grade&&gr.grade!=='unknown'?gr.grade:null;
+        if(gv){const c={good:'#4FD08A',mid:'#E6B357',bad:'#e06c75'}[gv],lab={good:'GOOD',mid:'MID',bad:'BAD'}[gv],ic={good:'✓',mid:'~',bad:'✕'}[gv];
+          status.innerHTML='<div class="scanok" style="background:'+c+'22;color:'+c+';border-color:'+c+'">'+ic+'</div><div class="scanmsg" style="color:'+c+'">'+lab+'</div><div class="hint" style="max-width:220px">'+escapeHtml(item.name)+'</div>';await delay(1500);}
+        else{status.innerHTML='<div class="scanok">✓</div><div class="scanmsg ok">PRODUCT FOUND</div>';await delay(850);}
+        if(done)return;cleanup();finish(item);}
     else{status.innerHTML='<div class="scanbad">✕</div><div class="scanmsg bad">PRODUCT NOT FOUND</div>';await delay(1400);if(done)return;idle();busy=false;}};
   const loop=async()=>{if(done)return;if(!busy){try{const codes=await det.detect(v);if(codes&&codes.length)handle(codes[0].rawValue);}catch(e){}}
     if(!done)requestAnimationFrame(loop);};
@@ -1363,7 +1442,7 @@ function renderMain(app){
   <header>
     <div data-daypick style="cursor:pointer"><div class="eyebrow mono">Quest Log</div><div class="day mono">${dayName} <span style="font-size:11px;color:var(--muted);-webkit-text-fill-color:var(--muted)">▾</span></div></div>
     <div class="chips">
-      <div class="chip streak mono" style="color:${streak>0?'var(--gold)':'var(--muted)'}">${svg(P.flame,'class="ico"')}<span>${streak}</span></div>
+      <div class="chip streak mono" data-streak style="color:${streak>0?'var(--gold)':'var(--muted)'}">${svg(P.flame,'class="ico"')}<span>${streak}</span></div>
       <div class="chip lvlwrap" data-profile style="cursor:pointer"><div class="lvltop"><span class="mono" style="font-size:9px;color:var(--violet)">LVL</span>
         <span class="mono" style="font-size:15px;font-weight:700">${lvl}</span></div>
         <div class="lvltrack"><div class="lvlfill" style="width:${Math.round(into/cost*100)}%"></div></div></div>
@@ -1404,6 +1483,7 @@ function renderMain(app){
   let st;pager.onscroll=()=>{clearTimeout(st);st=setTimeout(()=>{const idx=Math.round(pager.scrollLeft/(pager.clientWidth+GAP));const nt=TABS[Math.max(0,Math.min(TABS.length-1,idx))];if(nt&&nt!==tab){tab=nt;applyTab();}},60);};
   const pf=app.querySelector('[data-profile]');if(pf)pf.onclick=()=>{profileOpen=true;render();};
   const dpk=app.querySelector('[data-daypick]');if(dpk)dpk.onclick=()=>{route={name:'pastday',date:shift(dstr(),-1)};render();};
+  const stk=app.querySelector('[data-streak]');if(stk)stk.onclick=()=>streakPoke(stk,streak);
   const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};
   const ov=app.querySelector('#ov');if(ov){ov.onclick=e=>{if(e.target===ov){profileOpen=false;render();}};app.querySelector('#ovclose').onclick=()=>{profileOpen=false;render();};app.querySelectorAll('[data-switch]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.switch));
     const cs=app.querySelector('#cloudsave');if(cs)cs.onclick=async()=>{cs.textContent='↑ …';try{S.users[S.currentUser]._v=Date.now();const r=await sb.from('profiles').update({data:S.users[S.currentUser]}).eq('id',S.currentUser);if(r&&r.error){toast('save failed: '+r.error.message);}else{synced=true;dirty=false;toast('↑ Saved this device to cloud');}}catch(e){toast('save failed');}};
@@ -1855,7 +1935,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v28 · multiskill-daylog';
+const APP_VERSION='v29 · food-grade-social';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
