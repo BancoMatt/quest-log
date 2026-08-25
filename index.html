@@ -1045,6 +1045,8 @@ function foodGrade(item){if(!item)return null;
   if(!text&&!adds.length&&!nova)grade='unknown';
   else if(bad.length)grade='bad';else if(mid.length)grade='mid';else grade='good';
   return {grade,reasons:{bad:[...new Set(bad)],mid:[...new Set(mid)]}};}
+const BAD_LINES=["Hell nah...","WTF is this bruh?","Put that down...","You didn't want this right?","Is this food?","Not supposed to eat dog food","fuuuhh noh gng","Yeah nah","wb you eat real food?","McDonald kid ahhh meal","maaaaybe not","perhaps don't?","mmhh yummy trash","me tummy fill with trashy mmm","Just don't bruh","you thought it was good, yet here we are :)","Bill Gates would be proud of you","I'll Tell Aviv you are a good boy if you eat this...","Nuh huhh","Rweally Mate?"];
+function badLine(){return BAD_LINES[Math.floor(Math.random()*BAD_LINES.length)];}
 function gradeBadge(g){if(!g||g==='unknown')return '';const m={good:['GOOD','#4FD08A'],mid:['MID','#E6B357'],bad:['BAD','#e06c75']}[g];if(!m)return '';
   return `<span class="gradebadge" style="color:${m[1]};border-color:${m[1]}66;background:${m[1]}1a">${m[0]}</span>`;}
 function mapOff(p){const n=p.nutriments||{};
@@ -1125,7 +1127,7 @@ function foodAddModalHTML(){const it=foodPending,g=servingGrams(it);const sel=fo
   return `<div class="overlay" id="fov"><div class="sheet" style="max-width:360px">
     <div class="dtitle" style="font-size:18px">${escapeHtml(it.name)}</div>
     <div class="dsub">${it.brand?escapeHtml(it.brand)+' · ':''}${Math.round(it.n.kcal)} kcal/100g · P${Math.round(it.n.protein)} C${Math.round(it.n.carbs)} F${Math.round(it.n.fat)}</div>
-    ${(function(){const gr=foodGrade(it);if(!gr||gr.grade==='unknown')return '';const rs=gr.grade==='good'?'whole-food ingredients, nothing nasty':[...gr.reasons.bad,...gr.reasons.mid].slice(0,4).join(', ');return `<div class="graderow">${gradeBadge(gr.grade)}<span class="hint">${gr.grade==='good'?'clean · '+rs:'contains: '+rs}</span></div>`;})()}
+    ${(function(){const gr=foodGrade(it);if(!gr||gr.grade==='unknown')return '';const rs=gr.grade==='good'?'whole-food ingredients, nothing nasty':[...gr.reasons.bad,...gr.reasons.mid].slice(0,4).join(', ');return `<div class="graderow">${gradeBadge(gr.grade)}<span class="hint">${gr.grade==='good'?'clean · '+rs:(gr.grade==='bad'?escapeHtml(badLine())+' · ':'')+'contains: '+rs}</span></div>`;})()}
     <div class="mealpick">${MEALS.map(([k,lab])=>`<button class="mealopt${sel===k?' on':''}" data-meal="${k}">${lab}</button>`).join('')}</div>
     <div class="addbar" style="margin-top:10px"><input id="fgrams" inputmode="numeric" value="${g}" style="max-width:90px;text-align:center"/><span class="hint" style="align-self:center">grams</span></div>
     <div style="display:flex;gap:8px;margin-top:14px"><button class="btn ghost" id="fcancel" style="flex:1">Cancel</button><button class="btn" id="fadd" style="flex:1">Add</button></div>
@@ -1255,7 +1257,8 @@ async function startScan(finish){
     if(done)return;
     if(item){const gr=foodGrade(item),gv=gr&&gr.grade&&gr.grade!=='unknown'?gr.grade:null;
         if(gv){const c={good:'#4FD08A',mid:'#E6B357',bad:'#e06c75'}[gv],lab={good:'GOOD',mid:'MID',bad:'BAD'}[gv],ic={good:'✓',mid:'~',bad:'✕'}[gv];
-          status.innerHTML='<div class="scanok" style="background:'+c+'22;color:'+c+';border-color:'+c+'">'+ic+'</div><div class="scanmsg" style="color:'+c+'">'+lab+'</div><div class="hint" style="max-width:220px">'+escapeHtml(item.name)+'</div>';await delay(1500);}
+          const msg=gv==='bad'?badLine():lab;const sub=gv==='bad'?('BAD · '+item.name):item.name;
+          status.innerHTML='<div class="scanok" style="background:'+c+'22;color:'+c+';border-color:'+c+'">'+ic+'</div><div class="scanmsg" style="color:'+c+'">'+escapeHtml(msg)+'</div><div class="hint" style="max-width:240px">'+escapeHtml(sub)+'</div>';await delay(gv==='bad'?1900:1500);}
         else{status.innerHTML='<div class="scanok">✓</div><div class="scanmsg ok">PRODUCT FOUND</div>';await delay(850);}
         if(done)return;cleanup();finish(item);}
     else{status.innerHTML='<div class="scanbad">✕</div><div class="scanmsg bad">PRODUCT NOT FOUND</div>';await delay(1400);if(done)return;idle();busy=false;}};
@@ -1935,7 +1938,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v29 · food-grade-social';
+const APP_VERSION='v30 · scanner-fix-roast';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
