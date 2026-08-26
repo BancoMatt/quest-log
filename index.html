@@ -738,7 +738,7 @@ function defUser(name,color){return{name,color,created:dstr(),completions:0,tier
   history:{},weekly:{},areaXP:{markets:0,health:0,knowledge:0,business:0,productivity:0},
   books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}},dayLog:{},foodRecent:[]};}
 function defState(){return{currentUser:null,
-  users:{matt:defUser('Matt','#F2B14C'),jerry:defUser('Jerry','#5AA9E6'),alexio:defUser('Alexio','#56C596'),d4:defUser('D4','#E8618C'),Frost:defUser('Frost','#67E8F9'),george:defUser('George','#B58CFF')},
+  users:{matt:defUser('Matt','#F2B14C'),jerry:defUser('Jerry','#5AA9E6'),alexio:defUser('Alexio','#56C596'),d4:defUser('D4','#E8618C'),Frost:defUser('Frost','#67E8F9'),george:defUser('George','#B58CFF'),terka:defUser('Terka','#FF8AD1')},
   gym:defGym()};}
 
 let S,route={name:'home'},tab='home',showWelcome=false,profileOpen=false,lastCheck=null;
@@ -1938,10 +1938,10 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v30 · scanner-fix-roast';
+const APP_VERSION='v31 · +Terka';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
-  emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app'}};
+  emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app',terka:'terka@questlog.app'}};
 let sb=null, authUser=null, loginFor=null, pwFails={}, pulling=false, pushT=null, dirty=false, synced=false;
 function cloudReady(){return !!(CLOUD.url&&CLOUD.anon&&window.supabase);}
 function cloudOn(){return cloudReady()&&sb!==null;}
