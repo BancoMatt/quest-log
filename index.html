@@ -265,6 +265,7 @@
   .acc{background:var(--panel);border:1px solid var(--line);border-radius:13px;margin-bottom:10px;overflow:hidden}
   .acc.sub{background:var(--panel2);margin:10px 0 0;border-radius:10px;border-color:rgba(255,255,255,.05)}
   .acc.gro{border-color:rgba(242,177,76,.35)}
+  .acc.healthref{border-color:rgba(79,208,138,.35)}
   .acc-h{display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer}
   .acc-tt{flex:1;min-width:0}
   .acc-title{font-size:15px;font-weight:600}
@@ -1354,24 +1355,22 @@ function renderMain(app){
   <div class="toptabs">
     <div class="ttab ${tab==='home'?'on':''}" data-top="home" title="Quests">🎯</div>
     <div class="ttab ${tab==='health'?'on':''}" data-top="health" title="Health">🌿</div>
-    <div class="ttab ${tab==='calc'?'on':''}" data-top="calc" title="Body Calc">⚖️</div>
     <div class="ttab ${tab==='food'?'on':''}" data-top="food" title="Food">🥩</div>
     <div class="ttab ${tab==='sleep'?'on':''}" data-top="sleep" title="Sleep">🛏️</div>
   </div>
   <div class="pager" id="pager">
     <div class="pane" id="paneHome">${homePaneHTML()}</div>
     <div class="pane" id="paneHealth">${healthPaneHTML()}</div>
-    <div class="pane" id="paneCalc">${calcPaneHTML()}</div>
     <div class="pane" id="paneFood">${foodPaneHTML()}</div>
     <div class="pane" id="paneSleep">${sleepPaneHTML()}</div>
   </div>${profileOpen?profileModalHTML():''}`;
   wireHome(app.querySelector('#paneHome'));
   wireHealth(app.querySelector('#paneHealth'));
-  wireCalc(app.querySelector('#paneCalc'));
+  wireCalc(app.querySelector('#paneHealth'));
   wireFood(app.querySelector('#paneFood'));
   wireSleep(app.querySelector('#paneSleep'));
-  const pager=app.querySelector('#pager'),TABS=['home','health','calc','food','sleep'],GAP=20;
-  const ACCENTS={home:'#F5B942',health:'#4FD08A',calc:'#5CE0E6',food:'#FF7A5C',sleep:'#7C93FF'};
+  const pager=app.querySelector('#pager'),TABS=['home','health','food','sleep'],GAP=20;
+  const ACCENTS={home:'#F5B942',health:'#4FD08A',food:'#FF7A5C',sleep:'#7C93FF'};
   const setAccent=()=>{try{document.documentElement.style.setProperty('--accent',ACCENTS[tab]||'#F5B942');}catch(e){}};setAccent();
   const applyTab=()=>{app.querySelectorAll('[data-top]').forEach(e=>e.classList.toggle('on',e.dataset.top===tab));setAccent();};
   const setLeft=smooth=>{const idx=Math.max(0,TABS.indexOf(tab)),x=idx*(pager.clientWidth+GAP);
@@ -1476,14 +1475,12 @@ function healthPaneHTML(){
   return `<div class="acc gym" data-gymopen><div class="acc-h"><div class="acc-tt"><div class="acc-title">${svg(P.dumbbell,'class="ico" style="width:15px;height:15px;color:var(--violet);vertical-align:-2px"')} Gym tracker</div>
     <div class="acc-sum">tap to open your workout & body map</div></div><span class="acc-chev" style="transform:none">›</span></div></div>
   ${groceryPopupHTML()}
-  <div class="seclabel"><span>Health · reference</span></div>
-  ${HEALTH.map(sec=>{
-    const count=sec.subs?sec.subs.reduce((n,s)=>n+s.items.length,0):sec.items.length;
-    const body=sec.subs?sec.subs.map(s=>`<div class="acc sub open"><div class="acc-h" data-acc><div class="acc-title small">${s.title}</div><span class="acc-chev">›</span></div>
-        <div class="acc-body">${s.items.map(hItem).join('')}</div></div>`).join('')
-      :sec.items.map(hItem).join('');
-    return `<div class="acc open"><div class="acc-h" data-acc><div class="acc-tt"><div class="acc-title">${sec.title}</div><div class="acc-sum">${sec.summary} · ${count} items</div></div><span class="acc-chev">›</span></div>
-      <div class="acc-body">${body}</div></div>`;}).join('')}`;
+  <div class="acc healthref"><div class="acc-h" data-acc><div class="acc-tt"><div class="acc-title">🌿 Health Reference</div><div class="acc-sum">nutrition, foods &amp; guidelines · tap to open</div></div><span class="acc-chev">›</span></div>
+    <div class="acc-body">${HEALTH.map(sec=>{
+      const count=sec.subs?sec.subs.reduce((n,s)=>n+s.items.length,0):sec.items.length;
+      const body=sec.subs?sec.subs.map(s=>`<div class="acc sub open"><div class="acc-h" data-acc><div class="acc-title small">${s.title}</div><span class="acc-chev">›</span></div><div class="acc-body">${s.items.map(hItem).join('')}</div></div>`).join(''):sec.items.map(hItem).join('');
+      return `<div class="acc sub open"><div class="acc-h" data-acc><div class="acc-tt"><div class="acc-title small">${sec.title}</div><div class="acc-sum">${sec.summary} · ${count} items</div></div><span class="acc-chev">›</span></div><div class="acc-body">${body}</div></div>`;}).join('')}</div></div>
+  ${calcPaneHTML()}`;
 }
 function hItem(i){const idx=i.indexOf(' — ');
   if(idx>-1)return `<div class="hitem"><b>${escapeHtml(i.slice(0,idx))}</b><span>${escapeHtml(i.slice(idx+3))}</span></div>`;
@@ -1834,7 +1831,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v33 · no-finance';
+const APP_VERSION='v34 · health-merge';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||'',
   emails:{matt:'matt@questlog.app',jerry:'jerry@questlog.app',alexio:'alexio@questlog.app',d4:'d4@questlog.app',Frost:'frost@questlog.app',george:'george@questlog.app',terka:'terka@questlog.app'}};
