@@ -708,6 +708,7 @@ function archiveDay(u,day){if(!day||!day.date)return;u.dayLog=u.dayLog||{};
   u.dayLog[day.date]={tasks,side,xp};const ks=Object.keys(u.dayLog).sort();while(ks.length>10)delete u.dayLog[ks.shift()];}
 
 const GYM_VER=2;
+function defGymNew(){return{ver:GYM_VER,view:'log',sel:0,days:[{name:'Day 1',ex:[{id:'ex'+Date.now(),name:'Try and modify me!',mus:[],scheme:'4×10',cue:''}]}]};}
 function defGym(){
   const D1={name:'Day 1 · Chest – Arms',ex:[
     {id:'d1a',name:'High-to-low cable fly',mus:['chest'],scheme:'4×8+ · RIR 1–2',cue:'Low-shoulder chest engagement; shoulders tucked & down; upper-chest focus'},
@@ -740,12 +741,12 @@ function defGym(){
   return {ver:GYM_VER,sel:0,view:'log',days:[D1,D2,D3,D4,D5,C1,C2]};
 }
 function defUser(name,color){return{name,color,created:dstr(),completions:0,tiered:false,
-  daily:DAILY_DEFAULT.map(d=>Object.assign({},d)),
-  weeklyDefs:WEEKLY.map(w=>Object.assign({},w)),
+  daily:[{id:'starter',name:'Try and modify me!',xp:50,cad:'daily',ic:'zap',coreDaily:true,area:'productivity'}],
+  weeklyDefs:[{id:'wstarter',name:'Try and modify me!',xp:25,target:1,cad:'1× / week',ic:'zap',area:'productivity'}],
   areaLabels:{markets:'Markets',health:'Health',knowledge:'Knowledge',business:'Business',productivity:'Productivity',consistency:'Consistency'},
   dailyGoal:150,weeklyGoal:150,totalXP:0,cleared:[],badges:{},today:freshDay(dstr()),
   history:{},weekly:{},areaXP:{markets:0,health:0,knowledge:0,business:0,productivity:0},
-  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}},dayLog:{},foodRecent:[]};}
+  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gym:defGymNew(),gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}},dayLog:{},foodRecent:[]};}
 function defState(){return{currentUser:null,
   users:{},
   gym:defGym()};}
@@ -763,7 +764,12 @@ function normalizeUsers(){
   if(!u.areaLabels)u.areaLabels=du.areaLabels;
   if(!u.weeklyDefs||!u.weeklyDefs.length)u.weeklyDefs=WEEKLY.map(w=>Object.assign({},w));
   if(!u.today||u.today.date!==dstr()){if(u.today&&u.today.date)archiveDay(u,u.today);u.today=freshDay(dstr());}
-  gymMigrate(u);tierMigrate(u);}}
+  gymMigrate(u);tierMigrate(u);normUserGym(u);}}
+function normUserGym(u){
+  if(!u.gym||!u.gym.days||!u.gym.days.length){u.gym=(S.gym&&S.gym.days&&S.gym.days.length)?JSON.parse(JSON.stringify(S.gym)):defGymNew();}
+  if(u.gym.view===undefined)u.gym.view='log';
+  if(u.gym.sel==null||u.gym.sel>=u.gym.days.length)u.gym.sel=0;
+  u.gym.days.forEach(dd=>{dd.ex=dd.ex||[];dd.ex.forEach(e=>{if(!Array.isArray(e.mus))e.mus=guessMus(e.name);});});}
 function gymMigrate(u){if(u.gymWeekly)return;
   u.daily=(u.daily||[]).filter(t=>t.id!=='gym');
   if(!(u.weeklyDefs||[]).some(w=>w.id==='gym'))u.weeklyDefs.push({id:'gym',name:'Gym workout',xp:50,target:4,cad:'4× / week · tap to open',ic:'dumbbell',area:'health',view:'gym'});
@@ -824,6 +830,8 @@ function go(r){route=r;window.scrollTo(0,0);render();}
 
 /* ================= render root ================= */
 let _rafR=0;
+function wireRoBanner(app){const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{if(authUser)enterProfile(authUser);};}
+function roBanner(){return cloudOn()&&!canEdit()?`<div class="robanner">${svg(P.moon,'class="ico" style="width:14px;height:14px;vertical-align:-2px"')} Read-only — viewing ${U()?escapeHtml(U().name):'someone'} · <span class="rolog" data-rologin>back to yours</span></div>`:'';}
 function render(){if(_rafR)return;_rafR=requestAnimationFrame(()=>{_rafR=0;renderNow();});}
 function renderNow(){
   const app=document.getElementById('app');
@@ -1410,7 +1418,7 @@ function renderMain(app){
   const pf=app.querySelector('[data-profile]');if(pf)pf.onclick=()=>{profileOpen=true;render();};
   const dpk=app.querySelector('[data-daypick]');if(dpk)dpk.onclick=()=>{route={name:'pastday',date:shift(dstr(),-1)};render();};
   const stk=app.querySelector('[data-streak]');if(stk)stk.onclick=()=>streakPoke(stk,streak);
-  const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{loginFor=S.currentUser;render();};
+  const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{if(authUser)enterProfile(authUser);};
   const ov=app.querySelector('#ov');if(ov){ov.onclick=e=>{if(e.target===ov){profileOpen=false;render();}};app.querySelector('#ovclose').onclick=()=>{profileOpen=false;render();};app.querySelectorAll('[data-switch]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.switch));
     app.querySelectorAll('[data-circopen]').forEach(e=>e.onclick=()=>{const id=e.dataset.circopen;openCircle=openCircle===id?null:id;render();});
     const cm=app.querySelector('[data-circmenu]');if(cm)cm.onclick=()=>cm.closest('.acc').classList.toggle('open');
@@ -1621,7 +1629,7 @@ function wireTaskBody(app,id,t){
 }
 
 /* ================= gym: volume + body map ================= */
-function muscleVolume(){const map={};S.gym.days.forEach(d=>d.ex.forEach(e=>map[e.id]=e.mus||[]));
+function muscleVolume(){const map={};(U().gym&&U().gym.days||[]).forEach(d=>d.ex.forEach(e=>map[e.id]=e.mus||[]));
   const vol={};MUSCLES.forEach(m=>vol[m.id]=0);
   for(const date in U().gymSessions){const ent=U().gymSessions[date].entries||{};
     for(const exId in ent){const mus=map[exId]||[];if(!mus.length)continue;let t=0;
@@ -1654,7 +1662,7 @@ function bodyMapSVG(vol){
 
 /* ================= gym ================= */
 function renderGym(app){
-  const g=S.gym;
+  const g=U().gym||defGymNew();
   app.innerHTML=`<div class="back" id="back">${svg(P.arrow,'class="ico"')} Back</div>
     <div class="dtitle"><span class="ico" style="width:24px;height:24px;color:var(--gold)">${svg(P.dumbbell)}</span>Gym tracker</div>
     ${roBanner()}<div class="seg"><div class="tab ${g.view!=='body'?'on':''}" data-gview="log">Workout</div><div class="tab ${g.view==='body'?'on':''}" data-gview="body">Body map</div></div>
@@ -1664,16 +1672,19 @@ function renderGym(app){
   if(g.view==='body')renderBody(app.querySelector('#gymbody'));else renderWorkout(app.querySelector('#gymbody'));
 }
 function renderWorkout(host){
-  const g=S.gym,sel=g.sel,day=g.days[sel],today=dstr();
+  const g=U().gym||defGymNew();if(!g.days||!g.days.length){g.days=[{name:'Day 1',ex:[]}];g.sel=0;}
+  const sel=Math.min(g.sel||0,g.days.length-1),day=g.days[sel],today=dstr();
   const sess=(U().gymSessions[today]&&U().gymSessions[today].entries)||{};
-  host.innerHTML=`<div class="tabs">${g.days.map((d,i)=>`<div class="tab${i===sel?' on':''}" data-day="${i}">${escapeHtml(d.name.split('·')[0].trim())}</div>`).join('')}</div>
-    <div class="addbar" style="margin-bottom:14px"><input id="dayname" value="${escapeHtml(day.name)}"/></div>
+  host.innerHTML=`<div class="tabs">${g.days.map((d,i)=>`<div class="tab${i===sel?' on':''}" data-day="${i}">${escapeHtml(d.name.split('·')[0].trim())}</div>`).join('')}<div class="tab addday" data-dayadd title="Add a day">＋ day</div></div>
+    <div class="addbar" style="margin-bottom:14px"><input id="dayname" value="${escapeHtml(day.name)}"/>${g.days.length>1?`<button id="daydel" class="btn ghost" style="flex:0 0 auto;padding:0 12px;white-space:nowrap">Delete day</button>`:''}</div>
     ${day.ex.map(ex=>exHTML(ex,sess[ex.id]||[])).join('')}
     <div class="addbar"><input id="exname" placeholder="Add exercise…"/>
       <select id="exmus"><option value="auto">auto</option>${MUSCLES.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select>
       <button id="exadd">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div>
     <button class="btn ${U().today.done.gym?'done':''}" id="gymdone" style="margin-top:16px">${U().today.done.gym?'✓ Workout logged today (counts to weekly)':'Log this workout  +50 XP'}</button>`;
-  host.querySelectorAll('[data-day]').forEach(e=>e.onclick=()=>{g.sel=+e.dataset.day;persist();render();});
+  host.querySelectorAll('[data-day]').forEach(e=>e.onclick=()=>{U().gym.sel=+e.dataset.day;persist();render();});
+  const _da=host.querySelector('[data-dayadd]');if(_da)_da.onclick=()=>{if(!editGuard())return;U().gym.days.push({name:'Day '+(U().gym.days.length+1),ex:[{id:'ex'+Date.now(),name:'Try and modify me!',mus:[]}]});U().gym.sel=U().gym.days.length-1;persist();render();};
+  const _dd=host.querySelector('#daydel');if(_dd)_dd.onclick=()=>{if(!editGuard())return;if(U().gym.days.length<=1)return;if(!confirm('Delete this whole day?'))return;U().gym.days.splice(U().gym.sel,1);U().gym.sel=Math.min(U().gym.sel,U().gym.days.length-1);persist();render();};
   const dn=host.querySelector('#dayname');dn.readOnly=!canEdit();dn.oninput=()=>{if(!editGuard())return;day.name=dn.value;persist();};
   const exadd=()=>{const v=host.querySelector('#exname').value.trim();if(!v)return;const pick=host.querySelector('#exmus').value;
     if(!editGuard())return;day.ex.push({id:'e'+Date.now(),name:v,mus:pick==='auto'?guessMus(v):[pick]});persist();render();};
@@ -1868,7 +1879,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v35 · signup-circles';
+const APP_VERSION='v36 · fix+starter';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||''};
 let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null;
@@ -1901,12 +1912,10 @@ async function cloudPull(self){if(!cloudOn()||!myUid)return;try{
 function pushShared(){return !!(myUid&&sharedOwner&&myUid===sharedOwner);}
 function cloudPush(){if(pulling||!cloudOn()||!loggedIn()||!synced)return;dirty=true;S.users[authUser]._v=Date.now();clearTimeout(pushT);pushT=setTimeout(async()=>{try{
   const r1=await sb.from('profiles').update({data:S.users[authUser]}).eq('id',authUser);
-  let r2=null;if(pushShared())r2=await sb.from('profiles').update({data:{gym:S.gym}}).eq('id','shared');
-  if((r1&&r1.error)||(r2&&r2.error)){toast('⚠ sync failed — check connection');}else{dirty=false;}}catch(e){toast('⚠ sync failed — check connection');}},700);}
+  if(r1&&r1.error){toast('⚠ sync failed — check connection');}else{dirty=false;}}catch(e){toast('⚠ sync failed — check connection');}},700);}
 async function flushNow(){if(!cloudOn()||!loggedIn()||!dirty||!synced)return;clearTimeout(pushT);S.users[authUser]._v=Date.now();try{
   const r1=await sb.from('profiles').update({data:S.users[authUser]}).eq('id',authUser);
-  let r2=null;if(pushShared())r2=await sb.from('profiles').update({data:{gym:S.gym}}).eq('id','shared');
-  if(!((r1&&r1.error)||(r2&&r2.error)))dirty=false;}catch(e){}}
+  if(!(r1&&r1.error))dirty=false;}catch(e){}}
 function cloudSubscribe(){if(!cloudOn()||!sb.channel)return;try{sb.channel('profiles-rt').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},payload=>{
   const r=payload.new;if(!r||!r.id)return;
   if(r.id==='shared'){if(dirty)return;if(r.data&&r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
