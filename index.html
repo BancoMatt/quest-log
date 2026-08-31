@@ -746,7 +746,7 @@ function defUser(name,color){return{name,color,created:dstr(),completions:0,tier
   areaLabels:{markets:'Markets',health:'Health',knowledge:'Knowledge',business:'Business',productivity:'Productivity',consistency:'Consistency'},
   dailyGoal:150,weeklyGoal:150,totalXP:0,cleared:[],badges:{},today:freshDay(dstr()),
   history:{},weekly:{},areaXP:{markets:0,health:0,knowledge:0,business:0,productivity:0},
-  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gym:defGymNew(),gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}},dayLog:{},foodRecent:[]};}
+  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gym:defGymNew(),gymOwn:true,gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}},dayLog:{},foodRecent:[]};}
 function defState(){return{currentUser:null,
   users:{},
   gym:defGym()};}
@@ -760,13 +760,18 @@ function normalizeGym(){if(!S.gym||S.gym.ver!==GYM_VER){const keep=S.gym||{};S.g
   (S.gym.days||[]).forEach(d=>d.ex.forEach(e=>{if(!Array.isArray(e.mus))e.mus=guessMus(e.name);}));}
 function normalizeUsers(){
   for(const id in S.users){const u=S.users[id];const du=defUser('x','#fff');
-  for(const k in du)if(u[k]===undefined)u[k]=du[k];
+  for(const k in du)if(u[k]===undefined&&k!=='gym'&&k!=='gymOwn')u[k]=du[k];
   if(!u.areaLabels)u.areaLabels=du.areaLabels;
   if(!u.weeklyDefs||!u.weeklyDefs.length)u.weeklyDefs=WEEKLY.map(w=>Object.assign({},w));
   if(!u.today||u.today.date!==dstr()){if(u.today&&u.today.date)archiveDay(u,u.today);u.today=freshDay(dstr());}
   gymMigrate(u);tierMigrate(u);normUserGym(u);}}
 function normUserGym(u){
-  if(!u.gym||!u.gym.days||!u.gym.days.length){u.gym=(S.gym&&S.gym.days&&S.gym.days.length)?JSON.parse(JSON.stringify(S.gym)):defGymNew();}
+  const shared=(S.gym&&S.gym.days&&S.gym.days.length)?S.gym:null;
+  if(!u.gymOwn){ // pre-existing user (or v36-damaged): restore the split they used to have from the shared row
+    if(shared)u.gym=JSON.parse(JSON.stringify(shared));
+    else if(!u.gym||!u.gym.days||!u.gym.days.length)u.gym=defGymNew();
+    u.gymOwn=true;_gymRestored=true;}
+  if(!u.gym||!u.gym.days||!u.gym.days.length)u.gym=defGymNew();
   if(u.gym.view===undefined)u.gym.view='log';
   if(u.gym.sel==null||u.gym.sel>=u.gym.days.length)u.gym.sel=0;
   u.gym.days.forEach(dd=>{dd.ex=dd.ex||[];dd.ex.forEach(e=>{if(!Array.isArray(e.mus))e.mus=guessMus(e.name);});});}
@@ -829,7 +834,7 @@ function setGoal(k,dx){if(!editGuard())return;U()[k]=Math.max(50,U()[k]+dx);chec
 function go(r){route=r;window.scrollTo(0,0);render();}
 
 /* ================= render root ================= */
-let _rafR=0;
+let _rafR=0,_gymRestored=false;
 function wireRoBanner(app){const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{if(authUser)enterProfile(authUser);};}
 function roBanner(){return cloudOn()&&!canEdit()?`<div class="robanner">${svg(P.moon,'class="ico" style="width:14px;height:14px;vertical-align:-2px"')} Read-only — viewing ${U()?escapeHtml(U().name):'someone'} · <span class="rolog" data-rologin>back to yours</span></div>`:'';}
 function render(){if(_rafR)return;_rafR=requestAnimationFrame(()=>{_rafR=0;renderNow();});}
@@ -1879,7 +1884,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v36 · fix+starter';
+const APP_VERSION='v37 · gym-restore';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||''};
 let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null;
@@ -1950,7 +1955,7 @@ async function doSignup(name,email,password){authErr='';name=(name||'').trim();e
 async function afterAuth(){await refreshAuth();await cloudPull(true);
   if(myUid&&!authUser){try{await sb.from('profiles').insert({id:myUid,owner:myUid,data:defUser('Player',pickColor(myUid))});await cloudPull(true);}catch(e){}}
   if(authUser){S.currentUser=authUser;S.me=authUser;S.myUid=myUid;}
-  await loadCircles();authBusy=false;authChecking=false;openCircle=null;showWelcome=!!(authUser&&S.users[authUser]);persistLocal();cloudSubscribe();render();}
+  await loadCircles();if(_gymRestored){_gymRestored=false;persist();}authBusy=false;authChecking=false;openCircle=null;showWelcome=!!(authUser&&S.users[authUser]);persistLocal();cloudSubscribe();render();}
 async function doLogout(){try{await sb.auth.signOut();}catch(e){}
   authUser=null;myUid=null;S.me=null;S.myUid=null;S.currentUser=null;S.circles=[];S.circleMembers={};S.joinReqs={};synced=false;dirty=false;profileOpen=false;authMode='login';persistLocal();render();}
 
@@ -2022,7 +2027,7 @@ try{
   window.addEventListener('load',()=>{initCloud();['touchstart','touchmove','pointerdown','wheel','scroll'].forEach(ev=>window.addEventListener(ev,markInteract,{passive:true,capture:true}));
     if(!cloudOn()){authChecking=false;render();return;}
     sb.auth.getSession().then(({data})=>{
-      if(data&&data.session){refreshAuth().then(()=>cloudPull(true)).then(()=>loadCircles()).then(()=>{authChecking=false;cloudSubscribe();render();});}
+      if(data&&data.session){refreshAuth().then(()=>cloudPull(true)).then(()=>loadCircles()).then(()=>{if(_gymRestored){_gymRestored=false;persist();}authChecking=false;cloudSubscribe();render();});}
       else{authChecking=false;authUser=null;render();}
     }).catch(()=>{authChecking=false;render();});
     document.addEventListener('visibilitychange',()=>{if(!cloudOn())return;if(document.visibilityState==='hidden')flushNow();else reconcile();});
