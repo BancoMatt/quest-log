@@ -469,7 +469,7 @@ const P={
  rocket:'M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09zM12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z',
  arrow:'M19 12H5M12 19l-7-7 7-7'
 };
-const svg=(d,extra='')=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${d.split('M').filter(Boolean).map(s=>'<path d="M'+s+'"/>').join('')}</svg>`;
+const svg=(d,extra='')=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${(d||'').split('M').filter(Boolean).map(s=>'<path d="M'+s+'"/>').join('')}</svg>`;
 
 /* ================= config ================= */
 const KEY='quest-log-v4';
@@ -764,12 +764,15 @@ function normalizeUsers(){
   if(!u.areaLabels)u.areaLabels=du.areaLabels;
   if(!u.weeklyDefs||!u.weeklyDefs.length)u.weeklyDefs=WEEKLY.map(w=>Object.assign({},w));
   if(!u.today||u.today.date!==dstr()){if(u.today&&u.today.date)archiveDay(u,u.today);u.today=freshDay(dstr());}
+  if(!Array.isArray(u.today.side))u.today.side=[];if(!u.today.done||typeof u.today.done!=='object')u.today.done={};
   gymMigrate(u);tierMigrate(u);normUserGym(u);}}
 function normUserGym(u){
-  const shared=(S.gym&&S.gym.days&&S.gym.days.length)?S.gym:null;
-  if(!u.gymOwn){ // pre-existing user (or v36-damaged): restore the split they used to have from the shared row
-    if(shared)u.gym=JSON.parse(JSON.stringify(shared));
-    else if(!u.gym||!u.gym.days||!u.gym.days.length)u.gym=defGymNew();
+  // one-time gym setup for the logged-in user, decided only once cloud data (sharedOwner) is known:
+  // the shared-gym owner (Matt) keeps their real split; every other person starts from the blank placeholder.
+  if(u===S.users[authUser] && !u.gymOwn && synced){
+    const shared=(S.gym&&S.gym.days&&S.gym.days.length)?S.gym:null;
+    const isOwner=!!(myUid&&sharedOwner&&myUid===sharedOwner);
+    u.gym=(isOwner&&shared)?JSON.parse(JSON.stringify(shared)):defGymNew();
     u.gymOwn=true;_gymRestored=true;}
   if(!u.gym||!u.gym.days||!u.gym.days.length)u.gym=defGymNew();
   if(u.gym.view===undefined)u.gym.view='log';
@@ -834,7 +837,7 @@ function setGoal(k,dx){if(!editGuard())return;U()[k]=Math.max(50,U()[k]+dx);chec
 function go(r){route=r;window.scrollTo(0,0);render();}
 
 /* ================= render root ================= */
-let _rafR=0,_gymRestored=false;
+let _rafR=0,_gymRestored=false,pendingSignup=null;
 function wireRoBanner(app){const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{if(authUser)enterProfile(authUser);};}
 function roBanner(){return cloudOn()&&!canEdit()?`<div class="robanner">${svg(P.moon,'class="ico" style="width:14px;height:14px;vertical-align:-2px"')} Read-only — viewing ${U()?escapeHtml(U().name):'someone'} · <span class="rolog" data-rologin>back to yours</span></div>`:'';}
 function render(){if(_rafR)return;_rafR=requestAnimationFrame(()=>{_rafR=0;renderNow();});}
@@ -970,7 +973,7 @@ function profileModalHTML(){
   return `<div class="overlay" id="ov"><div class="sheet">
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
       <div class="avatar" style="background:${u.color}22;color:${u.color};border-color:${u.color}">${u.name[0]}</div>
-      <div style="flex:1"><div style="font-size:20px;font-weight:700">${u.name}</div><div class="mono" style="font-size:11px;color:var(--muted)">Level ${lv.lvl} · ${u.totalXP} XP</div></div>
+      <div style="flex:1"><div style="font-size:20px;font-weight:700"${canEdit()?' data-rename title="Tap to rename" style="cursor:pointer"':''}>${escapeHtml(u.name)}${canEdit()?' <span style="font-size:12px;color:var(--muted)">&#9998;</span>':''}</div><div class="mono" style="font-size:11px;color:var(--muted)">Level ${lv.lvl} · ${u.totalXP} XP</div></div>
       <span class="del" id="ovclose" style="width:24px;height:24px">${svg(P.x)}</span></div>
     <div class="pgrid">${cell(lv.lvl,'Level')}${cell(streak+'d','Streak')}${cell(u.cleared.length,'Days cleared')}${cell(u.completions||0,'Tasks done')}${cell(daysOn(u.created),'Days on app')}${cell(body.join(' · ')||'—','Body')}</div>
     <div class="mono" style="font-size:10px;color:var(--muted);margin:20px 2px 8px">Your circles${myCircleList().length?' · '+myCircleList().length+'/3':''}</div>
@@ -1425,6 +1428,7 @@ function renderMain(app){
   const stk=app.querySelector('[data-streak]');if(stk)stk.onclick=()=>streakPoke(stk,streak);
   const rl=app.querySelector('[data-rologin]');if(rl)rl.onclick=()=>{if(authUser)enterProfile(authUser);};
   const ov=app.querySelector('#ov');if(ov){ov.onclick=e=>{if(e.target===ov){profileOpen=false;render();}};app.querySelector('#ovclose').onclick=()=>{profileOpen=false;render();};app.querySelectorAll('[data-switch]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.switch));
+    const rn=app.querySelector('[data-rename]');if(rn)rn.onclick=()=>{if(!canEdit())return;const nv=prompt('New display name:',U().name);if(nv&&nv.trim()){U().name=nv.trim().slice(0,18);persist();render();}};
     app.querySelectorAll('[data-circopen]').forEach(e=>e.onclick=()=>{const id=e.dataset.circopen;openCircle=openCircle===id?null:id;render();});
     const cm=app.querySelector('[data-circmenu]');if(cm)cm.onclick=()=>cm.closest('.acc').classList.toggle('open');
     const ccg=app.querySelector('#ccGo');if(ccg)ccg.onclick=()=>createCircle(app.querySelector('#ccName').value);
@@ -1884,7 +1888,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v37 · gym-restore';
+const APP_VERSION='v39 · gym-per-person';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||''};
 let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null;
@@ -1949,11 +1953,14 @@ async function doSignup(name,email,password){authErr='';name=(name||'').trim();e
   try{const{data,error}=await sb.auth.signUp({email,password});
     if(error){authErr=error.message||'Sign up failed';authBusy=false;render();return;}
     if(!data.session){authBusy=false;authMode='login';authErr='Account created — confirm via the email we sent, then log in.';render();return;}
-    myUid=data.user.id;
-    try{await sb.from('profiles').insert({id:myUid,owner:myUid,data:defUser(name.slice(0,18),pickColor(email))});}catch(e){}
+    myUid=data.user.id;pendingSignup={name:name.slice(0,18),email};
     await afterAuth();}catch(e){authErr='Sign up failed — check connection';authBusy=false;render();}}
 async function afterAuth(){await refreshAuth();await cloudPull(true);
-  if(myUid&&!authUser){try{await sb.from('profiles').insert({id:myUid,owner:myUid,data:defUser('Player',pickColor(myUid))});await cloudPull(true);}catch(e){}}
+  if(myUid&&!authUser){const nm=(pendingSignup&&pendingSignup.name)||'Player',em=(pendingSignup&&pendingSignup.email)||myUid;
+    try{let ins=await sb.from('profiles').insert({id:myUid,owner:myUid,data:defUser(nm,pickColor(em))});
+      if(ins&&ins.error){await new Promise(r=>setTimeout(r,600));await sb.from('profiles').insert({id:myUid,owner:myUid,data:defUser(nm,pickColor(em))});}
+      await cloudPull(true);}catch(e){}}
+  pendingSignup=null;
   if(authUser){S.currentUser=authUser;S.me=authUser;S.myUid=myUid;}
   await loadCircles();if(_gymRestored){_gymRestored=false;persist();}authBusy=false;authChecking=false;openCircle=null;showWelcome=!!(authUser&&S.users[authUser]);persistLocal();cloudSubscribe();render();}
 async function doLogout(){try{await sb.auth.signOut();}catch(e){}
