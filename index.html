@@ -1324,24 +1324,34 @@ function wireFood(root){
     root.querySelector('#fadd').onclick=add;root.querySelector('#fcancel').onclick=()=>{foodPending=null;render();};
     fov.onclick=e=>{if(e.target===fov){foodPending=null;render();}};}
 }
+let _zxingP=null;
+function loadZXing(){
+  if(window.ZXing)return Promise.resolve(window.ZXing);
+  if(_zxingP)return _zxingP;
+  _zxingP=new Promise((res,rej)=>{const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js';s.async=true;
+    s.onload=()=>window.ZXing?res(window.ZXing):rej(new Error('zxing missing'));
+    s.onerror=()=>rej(new Error('zxing load failed'));document.head.appendChild(s);});
+  return _zxingP;
+}
 async function startScan(finish){
-  if(!('BarcodeDetector'in window)){foodMsg='Camera scanning isn’t supported on this device — type the barcode number instead.';foodBCopen=true;render();return;}
-  let stream;try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});}
-  catch(e){foodMsg='Camera unavailable — type the barcode number instead.';foodBCopen=true;render();return;}
+  // Android/Chrome have the native BarcodeDetector; iOS Safari/PWA does not, so
+  // there we lazy-load ZXing and decode from the live camera. Manual barcode
+  // entry (foodBCopen) is the fallback if the camera can't be used at all.
+  const native=('BarcodeDetector'in window);
   const ov=document.createElement('div');ov.className='overlay';ov.style.zIndex=60;
   ov.innerHTML=`<div class="sheet" style="max-width:360px;text-align:center">
     <div class="dtitle" style="font-size:18px">Scan barcode</div>
-    <video id="scanv" playsinline muted style="width:100%;border-radius:12px;background:#000;aspect-ratio:3/4;object-fit:cover"></video>
+    <video id="scanv" playsinline muted autoplay style="width:100%;border-radius:12px;background:#000;aspect-ratio:3/4;object-fit:cover"></video>
     <div id="scanStatus" class="scanstat"><div class="spin"></div><div class="hint">Point the camera at the barcode…</div></div>
     <button class="btn ghost" id="scancancel" style="margin-top:2px;width:100%">Cancel</button></div>`;
   document.body.appendChild(ov);
-  const v=ov.querySelector('#scanv');v.srcObject=stream;try{await v.play();}catch(e){}
-  let det;try{det=new window.BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128']});}catch(e){det=new window.BarcodeDetector();}
-  const status=ov.querySelector('#scanStatus');
-  let done=false,busy=false;const delay=ms=>new Promise(r=>setTimeout(r,ms));
-  const cleanup=()=>{done=true;try{stream.getTracks().forEach(t=>t.stop());}catch(e){}try{ov.remove();}catch(e){}};
+  const v=ov.querySelector('#scanv');const status=ov.querySelector('#scanStatus');
+  let done=false,busy=false,stream=null,reader=null;const delay=ms=>new Promise(r=>setTimeout(r,ms));
+  const cleanup=()=>{done=true;try{if(reader)reader.reset();}catch(e){}try{if(stream)stream.getTracks().forEach(t=>t.stop());}catch(e){}try{ov.remove();}catch(e){}};
   ov.querySelector('#scancancel').onclick=cleanup;
   const idle=()=>{status.innerHTML='<div class="spin"></div><div class="hint">Point the camera at the barcode…</div>';};
+  const bail=(msg)=>{cleanup();foodMsg=msg;foodBCopen=true;render();};
   const handle=async(code)=>{if(busy||done)return;busy=true;
     status.innerHTML='<div class="spin"></div><div class="scanmsg">Checking '+code+'…</div>';
     let item=null;try{const[it]=await Promise.all([offBarcode(code),delay(1400)]);item=it;}catch(e){item=null;}
@@ -1353,9 +1363,23 @@ async function startScan(finish){
         else{status.innerHTML='<div class="scanok">✓</div><div class="scanmsg ok">PRODUCT FOUND</div>';await delay(850);}
         if(done)return;cleanup();finish(item);}
     else{status.innerHTML='<div class="scanbad">✕</div><div class="scanmsg bad">PRODUCT NOT FOUND</div>';await delay(1400);if(done)return;idle();busy=false;}};
-  const loop=async()=>{if(done)return;if(!busy){try{const codes=await det.detect(v);if(codes&&codes.length)handle(codes[0].rawValue);}catch(e){}}
-    if(!done)requestAnimationFrame(loop);};
-  requestAnimationFrame(loop);
+  if(native){
+    try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});}
+    catch(e){return bail('Camera unavailable — type the barcode number instead.');}
+    if(done){try{stream.getTracks().forEach(t=>t.stop());}catch(e){}return;}
+    v.srcObject=stream;try{await v.play();}catch(e){}
+    let det;try{det=new window.BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128']});}catch(e){det=new window.BarcodeDetector();}
+    const loop=async()=>{if(done)return;if(!busy){try{const codes=await det.detect(v);if(codes&&codes.length)handle(codes[0].rawValue);}catch(e){}}if(!done)requestAnimationFrame(loop);};
+    requestAnimationFrame(loop);
+  } else {
+    let ZX;try{ZX=await loadZXing();}catch(e){return bail('Camera scanning couldn’t load — type the barcode number instead.');}
+    if(done)return;
+    try{
+      const hints=new Map();hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS,[ZX.BarcodeFormat.EAN_13,ZX.BarcodeFormat.EAN_8,ZX.BarcodeFormat.UPC_A,ZX.BarcodeFormat.UPC_E,ZX.BarcodeFormat.CODE_128]);
+      reader=new ZX.BrowserMultiFormatReader(hints);
+      await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}}},v,(result,err)=>{if(done)return;if(result&&result.getText)handle(result.getText());});
+    }catch(e){return bail('Camera unavailable — type the barcode number instead.');}
+  }
 }
 /* ================= sleep tracker ================= */
 function sleepDur(bed,wake){if(!bed||!wake)return 0;const p=s=>{const[h,m]=s.split(':').map(Number);return h*60+(m||0);};let d=p(wake)-p(bed);if(d<=0)d+=1440;return Math.round(d/60*10)/10;}
@@ -1972,7 +1996,7 @@ function wireCalc(root){
    S.users read-only. Never trust this client for anyone else's data — the wall
    is the RLS policy in secure-circles.sql. cloudPush writes only authUser's row;
    guardXP() (in the helpers section) caps implausible XP jumps. */
-const APP_VERSION='v43 · comments+bodymap';
+const APP_VERSION='v44 · ios-scan';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||''};
 let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null;
