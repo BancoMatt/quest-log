@@ -450,6 +450,10 @@
   .musedit-i{margin-left:auto;color:var(--muted);font-size:13px;padding:0 2px}
   .musedit{display:flex;flex-wrap:wrap;gap:6px;margin:-2px 0 12px;padding:11px;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:10px}
   .musedit .mchip{cursor:pointer}
+  .exnm{flex:1;min-width:0;background:transparent;border:none;border-bottom:1px solid transparent;color:var(--text);font-size:15px;font-weight:600;padding:2px 0;outline:none}
+  .exnm:focus{border-bottom-color:var(--line)}
+  .exmv{color:var(--muted);cursor:pointer;font-size:15px;padding:0 5px;user-select:none;flex-shrink:0}
+  .exmv:active{color:var(--text)}
 </style>
 </head>
 <body>
@@ -760,7 +764,7 @@ function defUser(name,color){return{name,color,created:dstr(),completions:0,tier
   areaLabels:{markets:'Markets',health:'Health',knowledge:'Knowledge',business:'Business',productivity:'Productivity',consistency:'Consistency'},
   dailyGoal:150,weeklyGoal:150,totalXP:0,cleared:[],badges:{},today:freshDay(dstr()),
   history:{},weekly:{},areaXP:{markets:0,health:0,knowledge:0,business:0,productivity:0},
-  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gym:defGymNew(),gymOwn:true,gymSessions:{},food:{},water:{},weight:{},sleep:{},finance:{networth:0,items:[],goal:{},invest:{rate:7}},dayLog:{},foodRecent:[]};}
+  books:[],grocery:[],shutdownLog:[],notes:{},calc:{inputs:{},report:null},gym:defGymNew(),gymOwn:true,gymSessions:{},food:{},water:{},weight:{},sleep:{},dayLog:{},foodRecent:[]};}
 function defState(){return{currentUser:null,
   users:{},
   gym:defGym()};}
@@ -797,12 +801,7 @@ function gymMigrate(u){if(u.gymWeekly)return;
   u.daily=(u.daily||[]).filter(t=>t.id!=='gym');
   if(!(u.weeklyDefs||[]).some(w=>w.id==='gym'))u.weeklyDefs.push({id:'gym',name:'Gym workout',xp:50,target:4,cad:'4× / week · tap to open',ic:'dumbbell',area:'health',view:'gym'});
   u.gymWeekly=true;}
-function fromV3(o){const s=defState(),m=s.users.matt;
-  ['dailyGoal','weeklyGoal','totalXP','cleared','badges','today','history','weekly','areaXP','books','grocery','shutdownLog','notes','calc'].forEach(k=>{if(o[k]!==undefined)m[k]=o[k];});
-  if(o.gym){s.gym={sel:o.gym.sel||0,view:o.gym.view||'log',days:o.gym.days||defGym().days};m.gymSessions=o.gym.sessions||{};}
-  return s;}
-function loadState(){try{const r=localStorage.getItem(KEY);if(r)return JSON.parse(r);
-    const v3=localStorage.getItem('quest-log-v3');if(v3){const o=JSON.parse(v3);if(o&&!o.users)return fromV3(o);}}catch(e){}return null;}
+function loadState(){try{const r=localStorage.getItem(KEY);if(r)return JSON.parse(r);}catch(e){}return null;}
 let _xpTrust=null;
 function guardXP(){const id=cloudOn()?authUser:S.currentUser;const u=id&&S.users&&S.users[id];if(!u)return;
   if(typeof u.totalXP!=='number'||isNaN(u.totalXP))u.totalXP=0;
@@ -890,17 +889,6 @@ function renderNow(){
     if(winY&&typeof window!=='undefined')window.scrollTo(0,winY);
     if(lastCheck){const el=app.querySelector('[data-toggle="'+lastCheck+'"]');if(el)el.classList.add('pop');lastCheck=null;}
   }catch(e){}});
-}
-function renderPicker(app){
-  const medal=['#F2C14E','#C9CDD6','#CD7F42'];const mlab=['1','2','3'];
-  const ranked=Object.entries(S.users).sort((a,b)=>(b[1].totalXP||0)-(a[1].totalXP||0));
-  app.innerHTML=`<div class="picker"><div class="pk-title mono">Who are you?</div>
-    <div class="pk-grid">${ranked.map(([id,u],r)=>`<div class="pk-card" data-pick="${id}">
-      <div class="rank" style="${r<3?'color:'+medal[r]+';border-color:'+medal[r]+'44':'color:var(--muted)'}">${r<3?'#'+mlab[r]:'#'+(r+1)}</div>
-      <div class="avatar" style="background:${u.color}22;color:${u.color};border-color:${u.color}">${u.name[0]}</div>
-      <div style="flex:1"><div class="pk-name">${u.name}</div><div class="pk-sub mono">Lv ${levelOf(u.totalXP).lvl} · ${(u.totalXP||0).toLocaleString()} XP</div></div>
-      ${r<3?`<span class="medal" style="color:${medal[r]}">${svg(P.trophy,'class="ico" style="width:17px;height:17px"')}</span>`:'<span class="chev">›</span>'}</div>`).join('')}</div></div>`;
-  app.querySelectorAll('[data-pick]').forEach(e=>e.onclick=()=>enterProfile(e.dataset.pick));
 }
 function renderWelcome(app){
   app.innerHTML=`<div class="welcome"><div><div class="wc-hi mono">Welcome back</div><div class="wc-name">${U().name}</div></div></div>`;
@@ -1728,6 +1716,9 @@ function renderWorkout(host){
   host.querySelector('#gymdone').onclick=()=>{const done=!!U().today.done.gym;bumpWeekly('gym',done?-1:1);U().today.done.gym=!done;persist();render();};
   host.querySelectorAll('[data-musedit]').forEach(e=>e.onclick=()=>{if(!editGuard())return;const id=e.dataset.musedit;gymMusOpen.has(id)?gymMusOpen.delete(id):gymMusOpen.add(id);render();});
   host.querySelectorAll('[data-mustoggle]').forEach(e=>e.onclick=()=>{if(!editGuard())return;const[exid,mid]=e.dataset.mustoggle.split('::');const ex=day.ex.find(x=>x.id===exid);if(!ex)return;ex.mus=ex.mus||[];ex.mus=ex.mus.includes(mid)?ex.mus.filter(x=>x!==mid):ex.mus.concat([mid]);persist();render();});
+  host.querySelectorAll('[data-exrename]').forEach(inp=>{inp.readOnly=!canEdit();inp.oninput=()=>{if(!editGuard())return;const ex=day.ex.find(x=>x.id===inp.dataset.exrename);if(ex){ex.name=inp.value;persist();}};});
+  host.querySelectorAll('[data-exup]').forEach(e=>e.onclick=()=>{if(!editGuard())return;const a=day.ex,i=a.findIndex(x=>x.id===e.dataset.exup);if(i>0){[a[i-1],a[i]]=[a[i],a[i-1]];persist();render();}});
+  host.querySelectorAll('[data-exdown]').forEach(e=>e.onclick=()=>{if(!editGuard())return;const a=day.ex,i=a.findIndex(x=>x.id===e.dataset.exdown);if(i>=0&&i<a.length-1){[a[i],a[i+1]]=[a[i+1],a[i]];persist();render();}});
   day.ex.forEach(ex=>{
     host.querySelectorAll(`[data-addset="${ex.id}"]`).forEach(e=>e.onclick=()=>{const s=ensureSession(today);if(!editGuard())return;s.entries[ex.id]=(s.entries[ex.id]||[]).concat([{w:'',r:''}]);persist();render();});
     host.querySelectorAll(`[data-rmset="${ex.id}"]`).forEach(e=>e.onclick=()=>{if(!editGuard())return;const a=ensureSession(today).entries[ex.id]||[];a.splice(+e.dataset.i,1);persist();render();});
@@ -1762,7 +1753,7 @@ function exHTML(ex,sets){
   const musEditor=gymMusOpen.has(ex.id)?`<div class="musedit">${MUSCLES.map(m=>`<span class="mchip${(ex.mus||[]).includes(m.id)?' on':''}" data-mustoggle="${ex.id}::${m.id}">${m.name}</span>`).join('')}</div>`:'';
   const sch=ex.scheme?`<span class="sch">${escapeHtml(ex.scheme)}</span>`:'';
   const cue=ex.cue?`<div class="excue">${escapeHtml(ex.cue)}</div>`:'';
-  return `<div class="panel ex"><div class="exhead"><span class="n">${escapeHtml(ex.name)}</span>${sch}<span class="del" data-exdel="${ex.id}">${svg(P.x)}</span></div>
+  return `<div class="panel ex"><div class="exhead"><input class="exnm" data-exrename="${ex.id}" value="${escapeHtml(ex.name)}" placeholder="Exercise name"/>${sch}<span class="exmv" data-exup="${ex.id}" title="Move up">↑</span><span class="exmv" data-exdown="${ex.id}" title="Move down">↓</span><span class="del" data-exdel="${ex.id}">${svg(P.x)}</span></div>
     <div class="chipline" data-musedit="${ex.id}">${musChips}<span class="musedit-i">✎</span></div>${musEditor}${cue}${last?`<div class="exlast">${last}</div>`:''}${rows}<div class="addset" data-addset="${ex.id}">+ add set</div></div>`;
 }
 
@@ -1919,7 +1910,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v41 · gym-revamp';
+const APP_VERSION='v42 · ex-edit+cleanup';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||''};
 let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null;
