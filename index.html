@@ -438,6 +438,18 @@
   .reqrow .t{flex:1;font-size:14px}
   .btn2{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:8px;font-size:12px;font-family:var(--mono);padding:6px 11px;cursor:pointer}
   .btn2.ok{border-color:#4FD08A66;color:#4FD08A;background:rgba(79,208,138,.12)}
+.dayhead{display:flex;gap:8px;align-items:center;margin-bottom:14px}
+  .dayhead input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;color:var(--text);font-size:15px;outline:none}
+  .binbtn{flex:0 0 auto;width:42px;height:42px;display:grid;place-items:center;border:1px solid rgba(224,108,117,.45);background:rgba(224,108,117,.12);color:#e06c75;border-radius:10px;cursor:pointer;padding:0}
+  .binbtn:active{background:rgba(224,108,117,.24)}
+  .tab.addday{flex:0 0 auto;padding:0 14px;color:var(--gold)}
+  .chipline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:9px;cursor:pointer}
+  .mchip{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.03em;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--muted)}
+  .mchip.on{border-color:var(--gold);color:var(--gold);background:rgba(242,177,76,.12)}
+  .mchip.empty{border-style:dashed}
+  .musedit-i{margin-left:auto;color:var(--muted);font-size:13px;padding:0 2px}
+  .musedit{display:flex;flex-wrap:wrap;gap:6px;margin:-2px 0 12px;padding:11px;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:10px}
+  .musedit .mchip{cursor:pointer}
 </style>
 </head>
 <body>
@@ -447,6 +459,7 @@
 <script>
 /* ================= icons ================= */
 const P={
+ trash:'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6',
  search:'M21 21l-4.35-4.35M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z',
  camera:'M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
  barcode:'M3 5v14M6 5v14M9.5 5v14M13 5v14M16 5v14M18 5v14M21 5v14',
@@ -1694,25 +1707,27 @@ function renderGym(app){
   app.querySelectorAll('[data-gview]').forEach(e=>e.onclick=()=>{g.view=e.dataset.gview;persist();render();});
   if(g.view==='body')renderBody(app.querySelector('#gymbody'));else renderWorkout(app.querySelector('#gymbody'));
 }
+const gymMusOpen=new Set();
 function renderWorkout(host){
   const g=U().gym||defGymNew();if(!g.days||!g.days.length){g.days=[{name:'Day 1',ex:[]}];g.sel=0;}
   const sel=Math.min(g.sel||0,g.days.length-1),day=g.days[sel],today=dstr();
   const sess=(U().gymSessions[today]&&U().gymSessions[today].entries)||{};
   host.innerHTML=`<div class="tabs">${g.days.map((d,i)=>`<div class="tab${i===sel?' on':''}" data-day="${i}">${escapeHtml(d.name.split('·')[0].trim())}</div>`).join('')}<div class="tab addday" data-dayadd title="Add a day">＋ day</div></div>
-    <div class="addbar" style="margin-bottom:14px"><input id="dayname" value="${escapeHtml(day.name)}"/>${g.days.length>1?`<button id="daydel" class="btn ghost" style="flex:0 0 auto;padding:0 12px;white-space:nowrap">Delete day</button>`:''}</div>
+    <div class="dayhead"><input id="dayname" value="${escapeHtml(day.name)}" placeholder="Day name"/>${g.days.length>1?`<button id="daydel" class="binbtn" title="Delete this day">${svg(P.trash,'class="ico" style="width:18px;height:18px"')}</button>`:''}</div>
     ${day.ex.map(ex=>exHTML(ex,sess[ex.id]||[])).join('')}
     <div class="addbar"><input id="exname" placeholder="Add exercise…"/>
-      <select id="exmus"><option value="auto">auto</option>${MUSCLES.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select>
       <button id="exadd">${svg(P.plus,'class="ico" style="width:20px;height:20px"')}</button></div>
     <button class="btn ${U().today.done.gym?'done':''}" id="gymdone" style="margin-top:16px">${U().today.done.gym?'✓ Workout logged today (counts to weekly)':'Log this workout  +50 XP'}</button>`;
   host.querySelectorAll('[data-day]').forEach(e=>e.onclick=()=>{U().gym.sel=+e.dataset.day;persist();render();});
   const _da=host.querySelector('[data-dayadd]');if(_da)_da.onclick=()=>{if(!editGuard())return;U().gym.days.push({name:'Day '+(U().gym.days.length+1),ex:[{id:'ex'+Date.now(),name:'Try and modify me!',mus:[]}]});U().gym.sel=U().gym.days.length-1;persist();render();};
   const _dd=host.querySelector('#daydel');if(_dd)_dd.onclick=()=>{if(!editGuard())return;if(U().gym.days.length<=1)return;if(!confirm('Delete this whole day?'))return;U().gym.days.splice(U().gym.sel,1);U().gym.sel=Math.min(U().gym.sel,U().gym.days.length-1);persist();render();};
   const dn=host.querySelector('#dayname');dn.readOnly=!canEdit();dn.oninput=()=>{if(!editGuard())return;day.name=dn.value;persist();};
-  const exadd=()=>{const v=host.querySelector('#exname').value.trim();if(!v)return;const pick=host.querySelector('#exmus').value;
-    if(!editGuard())return;day.ex.push({id:'e'+Date.now(),name:v,mus:pick==='auto'?guessMus(v):[pick]});persist();render();};
+  const exadd=()=>{const v=host.querySelector('#exname').value.trim();if(!v)return;
+    if(!editGuard())return;day.ex.push({id:'e'+Date.now(),name:v,mus:guessMus(v)});persist();render();};
   host.querySelector('#exadd').onclick=exadd;host.querySelector('#exname').onkeydown=e=>{if(e.key==='Enter')exadd();};
   host.querySelector('#gymdone').onclick=()=>{const done=!!U().today.done.gym;bumpWeekly('gym',done?-1:1);U().today.done.gym=!done;persist();render();};
+  host.querySelectorAll('[data-musedit]').forEach(e=>e.onclick=()=>{if(!editGuard())return;const id=e.dataset.musedit;gymMusOpen.has(id)?gymMusOpen.delete(id):gymMusOpen.add(id);render();});
+  host.querySelectorAll('[data-mustoggle]').forEach(e=>e.onclick=()=>{if(!editGuard())return;const[exid,mid]=e.dataset.mustoggle.split('::');const ex=day.ex.find(x=>x.id===exid);if(!ex)return;ex.mus=ex.mus||[];ex.mus=ex.mus.includes(mid)?ex.mus.filter(x=>x!==mid):ex.mus.concat([mid]);persist();render();});
   day.ex.forEach(ex=>{
     host.querySelectorAll(`[data-addset="${ex.id}"]`).forEach(e=>e.onclick=()=>{const s=ensureSession(today);if(!editGuard())return;s.entries[ex.id]=(s.entries[ex.id]||[]).concat([{w:'',r:''}]);persist();render();});
     host.querySelectorAll(`[data-rmset="${ex.id}"]`).forEach(e=>e.onclick=()=>{if(!editGuard())return;const a=ensureSession(today).entries[ex.id]||[];a.splice(+e.dataset.i,1);persist();render();});
@@ -1742,11 +1757,13 @@ function exHTML(ex,sets){
     <input data-set="${ex.id}" data-i="${i}" data-f="w" inputmode="decimal" placeholder="kg" value="${s.w||''}"/><span class="u">kg</span>
     <input data-set="${ex.id}" data-i="${i}" data-f="r" inputmode="numeric" placeholder="reps" value="${s.r||''}"/><span class="u">reps</span>
     <span class="rm" data-rmset="${ex.id}" data-i="${i}">${svg(P.x,'class="ico" style="width:16px;height:16px"')}</span></div>`).join('');
-  const last=lastFor(ex.id),mus=(ex.mus||[]).map(m=>MNAME[m]).join(' · ');
+  const last=lastFor(ex.id);
+  const musChips=(ex.mus||[]).length?(ex.mus||[]).map(m=>`<span class="mchip on">${MNAME[m]||m}</span>`).join(''):'<span class="mchip empty">＋ set muscles</span>';
+  const musEditor=gymMusOpen.has(ex.id)?`<div class="musedit">${MUSCLES.map(m=>`<span class="mchip${(ex.mus||[]).includes(m.id)?' on':''}" data-mustoggle="${ex.id}::${m.id}">${m.name}</span>`).join('')}</div>`:'';
   const sch=ex.scheme?`<span class="sch">${escapeHtml(ex.scheme)}</span>`:'';
   const cue=ex.cue?`<div class="excue">${escapeHtml(ex.cue)}</div>`:'';
   return `<div class="panel ex"><div class="exhead"><span class="n">${escapeHtml(ex.name)}</span>${sch}<span class="del" data-exdel="${ex.id}">${svg(P.x)}</span></div>
-    <div class="exmus">${mus||'no muscle tag'}</div>${cue}${last?`<div class="exlast">${last}</div>`:''}${rows}<div class="addset" data-addset="${ex.id}">+ add set</div></div>`;
+    <div class="chipline" data-musedit="${ex.id}">${musChips}<span class="musedit-i">✎</span></div>${musEditor}${cue}${last?`<div class="exlast">${last}</div>`:''}${rows}<div class="addset" data-addset="${ex.id}">+ add set</div></div>`;
 }
 
 /* ================= body calc ================= */
@@ -1902,7 +1919,7 @@ function wireCalc(root){
 }
 
 /* ================= cloud sync + auth (Supabase) ================= */
-const APP_VERSION='v40 · balance+guards';
+const APP_VERSION='v41 · gym-revamp';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||''};
 let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null;
