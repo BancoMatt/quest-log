@@ -454,6 +454,7 @@
   .exnm:focus{border-bottom-color:var(--line)}
   .exmv{color:var(--muted);cursor:pointer;font-size:15px;padding:0 5px;user-select:none;flex-shrink:0}
   .exmv:active{color:var(--text)}
+  .recentlist{max-height:158px;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:0 -2px;padding:2px}
 </style>
 </head>
 <body>
@@ -913,12 +914,17 @@ function renderNow(){
   else if(route.name==='editstats')renderEditStats(app);
   else if(route.name==='pastday')renderPastDay(app,route.date);
   else renderMain(app);
-  requestAnimationFrame(()=>{try{
+  // Size the pager NOW (sync) so the panes have their real height, THEN restore
+  // scroll in the same frame as the DOM swap. Without the sync sizePager the panes
+  // aren't scrollable yet and scrollTop clamps to 0 (page jumps to top and stays).
+  // Doing both before paint = no flash and correct position = seamless update.
+  try{sizePager();}catch(e){}
+  try{
     saves.forEach(([sel,top])=>{const el=app.querySelector(sel);if(el)el.scrollTop=top;});
     const pg=app.querySelector('#pager');if(pg&&pgLeft!=null)pg.scrollLeft=pgLeft;
     if(winY&&typeof window!=='undefined')window.scrollTo(0,winY);
-    if(lastCheck){const el=app.querySelector('[data-toggle="'+lastCheck+'"]');if(el)el.classList.add('pop');lastCheck=null;}
-  }catch(e){}});
+  }catch(e){}
+  if(lastCheck){const _lc=lastCheck;lastCheck=null;requestAnimationFrame(()=>{try{const el=app.querySelector('[data-toggle="'+_lc+'"]');if(el)el.classList.add('pop');}catch(e){}});}
 }
 function renderWelcome(app){
   app.innerHTML=`<div class="welcome"><div><div class="wc-hi mono">Welcome back</div><div class="wc-name">${U().name}</div></div></div>`;
@@ -1186,7 +1192,7 @@ function findEntry(id){return ((U().food&&U().food[dstr()])||[]).find(e=>e.id===
 function updateFoodGrams(id,grams){if(!editGuard())return;const e=findEntry(id);if(!e)return;e.grams=Math.max(1,Math.round(grams))||e.grams;persist();render();}
 function recentFoodsHTML(){const r=(U().foodRecent||[]);if(!r.length||foodQ)return '';
   return `<div class="recentwrap"><div class="hint" style="margin:12px 0 4px">Recent · tap to add again</div>
-    ${r.slice(0,10).map((it,i)=>`<div class="recentrow" data-frq="${i}"><div style="flex:1;min-width:0"><div class="fr-nm">${escapeHtml(it.name)}${gradeBadge(it.grade)}</div><div class="fr-sub mono">${Math.round(it.n.kcal)} kcal/100g</div></div><span class="fr-add">${svg(P.plus,'class="ico" style="width:18px;height:18px"')}</span></div>`).join('')}</div>`;}
+    <div class="recentlist">${r.slice(0,12).map((it,i)=>`<div class="recentrow" data-frq="${i}"><div style="flex:1;min-width:0"><div class="fr-nm">${escapeHtml(it.name)}${gradeBadge(it.grade)}</div><div class="fr-sub mono">${Math.round(it.n.kcal)} kcal/100g</div></div><span class="fr-add">${svg(P.plus,'class="ico" style="width:18px;height:18px"')}</span></div>`).join('')}</div></div>`;}
 function foodEditModalHTML(){const e=findEntry(foodEditId);if(!e)return '';const f=e.grams/100;
   return `<div class="overlay" id="feov"><div class="sheet" style="max-width:340px">
     <div class="dtitle" style="font-size:18px">${escapeHtml(e.name)}</div>
@@ -1996,7 +2002,7 @@ function wireCalc(root){
    S.users read-only. Never trust this client for anyone else's data — the wall
    is the RLS policy in secure-circles.sql. cloudPush writes only authUser's row;
    guardXP() (in the helpers section) caps implausible XP jumps. */
-const APP_VERSION='v44 · ios-scan';
+const APP_VERSION='v46 · seamless-fix';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||''};
 let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null;
