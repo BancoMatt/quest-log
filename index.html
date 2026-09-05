@@ -1072,13 +1072,33 @@ const COMMON_FOODS=[
  ['Tomato',18,0.9,3.9,0.2,1.2],['Cucumber',15,0.7,3.6,0.1,0.5],['Bell pepper',31,1,6,0.3,2.1],
  ['Almonds',579,21,22,50,12],['Peanut butter',588,25,20,50,6],['Walnuts',654,15,14,65,7],
  ['Lentils (cooked)',116,9,20,0.4,8],['Chickpeas (cooked)',164,9,27,2.6,8],['Black beans (cooked)',132,8.9,24,0.5,8.7],
- ['Tofu',76,8,1.9,4.8,0.3],['Honey',304,0.3,82,0,0],['Dark chocolate 70%',598,7.9,46,43,11]
+ ['Tofu',76,8,1.9,4.8,0.3],['Honey',304,0.3,82,0,0],['Dark chocolate 70%',598,7.9,46,43,11],
+ ['Roast beef',127,25,0.6,2.5,0],['Ground beef 20%',254,17,0,20,0],['Ribeye steak',291,24,0,21,0],['Sirloin steak',206,27,0,10,0],
+ ['Pork chop',231,24,0,15,0],['Bacon',541,37,1.4,42,0],['Ham (deli)',145,18,3,7,0],['Prosciutto',195,26,0.5,10,0],
+ ['Salami',336,22,1,27,0],['Turkey slices (deli)',104,17,3,2,0],['Lamb chop',282,25,0,20,0],['Sausage',301,13,3,27,0],
+ ['Meatballs',197,14,5,13,0.5],['Sardines (canned)',208,25,0,11,0],['Mackerel',205,19,0,14,0],['Tilapia',96,20,0,1.7,0],
+ ['Ricotta',174,11,3,13,0],['Parmesan',392,36,3.2,26,0],['Feta',264,14,4,21,0],['Cream cheese',342,6,4,34,0],
+ ['Sour cream',198,2.4,4.6,19,0],['Heavy cream',340,2.8,2.8,36,0],['Couscous (cooked)',112,3.8,23,0.2,1.4],['Bulgur (cooked)',83,3,19,0.2,4.5],
+ ['Rye bread',259,8.5,48,3.3,5.8],['Bagel',250,10,49,1.5,2.1],['Tortilla (wheat)',304,8,51,7,3],['Kidney beans (cooked)',127,8.7,23,0.5,6.4],
+ ['Edamame',121,12,9,5,5],['Hummus',166,8,14,10,6],['Green beans',31,1.8,7,0.2,3.4],['Peas',81,5.4,14,0.4,5.7],
+ ['Zucchini',17,1.2,3.1,0.3,1],['Mushrooms',22,3.1,3.3,0.3,1],['Onion',40,1.1,9,0.1,1.7],['Lettuce',15,1.4,2.9,0.2,1.3],
+ ['Cauliflower',25,1.9,5,0.3,2],['Asparagus',20,2.2,3.9,0.1,2.1],['Eggplant',25,1,6,0.2,3],['Kale',49,4.3,9,0.9,3.6],
+ ['Cabbage',25,1.3,6,0.1,2.5],['Green peas',81,5.4,14,0.4,5.7],['Pear',57,0.4,15,0.1,3.1],['Peach',39,0.9,10,0.3,1.5],
+ ['Watermelon',30,0.6,8,0.2,0.4],['Kiwi',61,1.1,15,0.5,3],['Cherries',63,1.1,16,0.2,2.1],['Raspberries',52,1.2,12,0.7,6.5],
+ ['Dates',277,1.8,75,0.2,6.7],['Raisins',299,3.1,79,0.5,3.7],['Cashews',553,18,30,44,3.3],['Pistachios',560,20,28,45,10],
+ ['Chia seeds',486,17,42,31,34],['Sunflower seeds',584,21,20,51,8.6],['Pumpkin seeds',559,30,11,49,6],['Granola',471,10,64,20,7],
+ ['Rice cakes',387,8,82,2.8,4.2],['Maple syrup',260,0,67,0.1,0],['Coconut (dried)',660,6.9,24,65,16],['French fries',312,3.4,41,15,3.8],
+ ['Pizza (cheese)',266,11,33,10,2.3],['Protein bar',350,30,40,10,5],['Ketchup',101,1.2,26,0.1,0.3],['Mayonnaise',680,1,0.6,75,0]
 ];
 function commonToItem(f){return {code:'',name:f[0],brand:'',serving:'',_generic:true,ing:f[0].toLowerCase(),additives:[],nova:1,
   n:{kcal:f[1],protein:f[2],carbs:f[3],fat:f[4],fiber:f[5]||0,sugars:0,satfat:0,sodium:0,potassium:0,calcium:0,iron:0,magnesium:0,zinc:0,phosphorus:0,vitc:0,vita:0,vitd:0,vitb6:0,vitb12:0,cholesterol:0}};}
-function searchCommon(q){q=(q||'').toLowerCase().trim();if(!q)return [];
-  return COMMON_FOODS.filter(f=>f[0].toLowerCase().includes(q))
-    .sort((a,b)=>((a[0].toLowerCase().startsWith(q)?0:1)-(b[0].toLowerCase().startsWith(q)?0:1))||a[0].length-b[0].length)
+function foodNorm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');}
+function searchCommon(q){const raw=(q||'').toLowerCase().trim();const qn=foodNorm(q);if(!qn)return [];
+  const words=raw.split(/\s+/).filter(Boolean);
+  return COMMON_FOODS.filter(f=>{const nmn=foodNorm(f[0]);
+      if(nmn.includes(qn))return true;                         // squished: ignores spaces/accents/case
+      return words.every(w=>nmn.includes(foodNorm(w)));})      // all typed words appear
+    .sort((a,b)=>{const an=foodNorm(a[0]),bn=foodNorm(b[0]);return ((an.startsWith(qn)?0:1)-(bn.startsWith(qn)?0:1))||a[0].length-b[0].length;})
     .map(commonToItem);}
 /* macro split */
 function round5(x){return Math.round(x/5)*5;}
@@ -1163,19 +1183,23 @@ function mapOff(p){const n=p.nutriments||{};
        vitb6:mg(gv('vitamin-b6')),vitb12:ug(gv('vitamin-b12')),cholesterol:mg(gv('cholesterol'))}};}
 function hasFood(p){return p.name&&(p.n.kcal>0||p.n.protein>0||p.n.carbs>0||p.n.fat>0);}
 const FOOD_FIELDS='code,product_name,product_name_en,generic_name,brands,nutriments,serving_size,ingredients_text,ingredients_text_en,additives_tags,nova_group';
+function fetchT(url,opts,ms){return new Promise((res,rej)=>{let ac;try{ac=new AbortController();}catch(e){}
+  const t=setTimeout(()=>{try{ac&&ac.abort();}catch(e){}rej(new Error('timeout'));},ms||8000);
+  fetch(url,Object.assign({},opts||{},ac?{signal:ac.signal}:{})).then(r=>{clearTimeout(t);res(r);},e=>{clearTimeout(t);rej(e);});});}
 async function foodApi(params){
   const isBC=params.barcode!=null;
   const qs=isBC?('barcode='+encodeURIComponent(params.barcode)):('q='+encodeURIComponent(params.q));
-  // 1) first-party Supabase Edge Function proxy (reliable, no CORS)
-  try{if(typeof CLOUD!=='undefined'&&CLOUD.url&&CLOUD.anon){
-    const r=await fetch(CLOUD.url+'/functions/v1/food?'+qs,{headers:{apikey:CLOUD.anon,Authorization:'Bearer '+CLOUD.anon}});
-    if(r.ok){const j=await r.json();if(j&&!j.error)return j;}}}catch(e){}
-  // 2) fallback: direct Open Food Facts, then public CORS proxies
+  // 1) first-party Supabase Edge Function proxy (no CORS). Timed; retried once for cold starts.
+  if(typeof CLOUD!=='undefined'&&CLOUD.url&&CLOUD.anon){
+    for(let i=0;i<2;i++){try{const r=await fetchT(CLOUD.url+'/functions/v1/food?'+qs,{headers:{apikey:CLOUD.anon,Authorization:'Bearer '+CLOUD.anon}},i?9000:6000);
+      if(r.ok){const j=await r.json();if(j&&!j.error)return j;}}catch(e){}}
+  }
+  // 2) fallback: direct Open Food Facts, then public CORS proxies (each with a timeout so we never hang)
   const off=isBC
     ?'https://world.openfoodfacts.org/api/v0/product/'+encodeURIComponent(params.barcode)+'.json?fields='+FOOD_FIELDS
     :'https://world.openfoodfacts.org/cgi/search.pl?search_terms='+encodeURIComponent(params.q)+'&search_simple=1&action=process&json=1&page_size=30&fields='+FOOD_FIELDS;
   const tries=[off,'https://corsproxy.io/?url='+encodeURIComponent(off),'https://api.allorigins.win/raw?url='+encodeURIComponent(off)];
-  let err;for(const url of tries){try{const r=await fetch(url);if(r.ok){const t=await r.text();try{return JSON.parse(t);}catch(_){}}else err=new Error('HTTP '+r.status);}catch(e){err=e;}}
+  let err;for(const url of tries){try{const r=await fetchT(url,{},8000);if(r.ok){const t=await r.text();try{return JSON.parse(t);}catch(_){}}else err=new Error('HTTP '+r.status);}catch(e){err=e;}}
   throw err||new Error('unreachable');}
 async function offSearch(q){const j=await foodApi({q});return (j.products||[]).map(mapOff).filter(hasFood);}
 async function offBarcode(code){const j=await foodApi({barcode:String(code).replace(/\D/g,'')});
@@ -1294,7 +1318,7 @@ function wireFood(root){
         foodMsg=foodResults.length?'':'No matches — try a simpler term or scan the barcode.';}
     catch(e){foodMsg=foodResults.length?'':'Couldn\'t reach the food database — showing common foods only. Check your connection for packaged items.';}
     foodBusy=false;render();};
-  const sb=root.querySelector('#foodScanBtn');
+  const scanBtn=root.querySelector('#foodScanBtn');
   if(q){q.onkeydown=e=>{if(e.key==='Enter')doSearch();};}
   const ico=root.querySelector('.fs-ico');if(ico)ico.onclick=doSearch;
   root.querySelectorAll('[data-fr]').forEach(e=>e.onclick=()=>{const p=foodResults[+e.dataset.fr];if(p){foodPending=p;render();}});
@@ -1313,7 +1337,7 @@ function wireFood(root){
     render();};
   if(bcb)bcb.onclick=()=>doBC(bc&&bc.value);
   if(bc)bc.onkeydown=e=>{if(e.key==='Enter')doBC(bc.value);};
-  if(sb)sb.onclick=()=>startScan(it=>{foodPending=it;foodMsg='';render();});
+  if(scanBtn)scanBtn.onclick=()=>startScan(it=>{foodPending=it;foodMsg='';render();});
   root.querySelectorAll('[data-micacc]').forEach(h=>h.onclick=()=>h.closest('.acc').classList.toggle('open'));
   root.querySelectorAll('[data-water]').forEach(e=>e.onclick=()=>addWater(+e.dataset.water));
   root.querySelectorAll('[data-fdel]').forEach(e=>e.onclick=()=>{const id=e.dataset.fdel;if(foodDelConfirm===id){foodDelConfirm=null;removeFood(id);}else{foodDelConfirm=id;render();}});
@@ -2002,7 +2026,7 @@ function wireCalc(root){
    S.users read-only. Never trust this client for anyone else's data — the wall
    is the RLS policy in secure-circles.sql. cloudPush writes only authUser's row;
    guardXP() (in the helpers section) caps implausible XP jumps. */
-const APP_VERSION='v46 · seamless-fix';
+const APP_VERSION='v47 · food+sync';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||''};
 let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null;
@@ -2041,17 +2065,19 @@ async function flushNow(){if(!cloudOn()||!loggedIn()||!dirty||!synced)return;cle
   const r1=await sb.from('profiles').update({data:S.users[authUser]}).eq('id',authUser);
   if(!(r1&&r1.error))dirty=false;}catch(e){}}
 function cloudSubscribe(){if(!cloudOn()||!sb.channel)return;try{sb.channel('profiles-rt').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},payload=>{
-  const r=payload.new;if(!r||!r.id)return;
-  if(r.id==='shared'){if(dirty)return;if(r.data&&r.data.gym)S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});}
-  else{const cloudV=(r.data&&r.data._v)||0,localV=(S.users[r.id]&&S.users[r.id]._v)||0;
-    if(r.id===authUser&&dirty&&cloudV<=localV)return;
-    if(S.users[r.id]&&r.data&&Object.keys(r.data).length){S.users[r.id]=r.data;if(r.id===authUser)dirty=false;}}
-  normalizeGym();normalizeUsers();persistLocal();syncRender();}).subscribe();}catch(e){}}
+  const r=payload.new;if(!r||!r.id)return;let repaint=false;
+  if(r.id==='shared'){if(dirty)return;if(r.data&&r.data.gym){S.gym=Object.assign(defGym(),r.data.gym,{ver:GYM_VER});repaint=true;}}
+  else if(r.id===authUser){ // echo of our own write: sync bookkeeping, but do NOT repaint our screen
+    const cloudV=(r.data&&r.data._v)||0,localV=(S.users[r.id]&&S.users[r.id]._v)||0;
+    if(!(dirty&&cloudV<=localV)&&S.users[r.id]&&r.data&&Object.keys(r.data).length){S.users[r.id]=r.data;dirty=false;}
+    normalizeGym();normalizeUsers();persistLocal();return;}
+  else if(S.users[r.id]&&r.data&&Object.keys(r.data).length){S.users[r.id]=r.data;repaint=true;}
+  normalizeGym();normalizeUsers();persistLocal();if(repaint)syncRender();}).subscribe();}catch(e){}}
 async function reconcile(){if(!cloudOn())return;await cloudPull(false);if(dirty)await flushNow();await loadCircles();syncRender();}
 function typing(){const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);}
 let lastInteract=0,_srT=null;
 function markInteract(){lastInteract=Date.now();}
-function syncRender(){if(typing()||Date.now()-lastInteract<600){clearTimeout(_srT);_srT=setTimeout(()=>{if(!typing()&&Date.now()-lastInteract>=550)render();},700);return;}render();}
+function syncRender(){if(typing()||Date.now()-lastInteract<1200){clearTimeout(_srT);_srT=setTimeout(syncRender,500);return;}render();}
 
 /* ---- auth ---- */
 const AVATAR_COLORS=['#F2B14C','#5AA9E6','#56C596','#E8618C','#67E8F9','#B58CFF','#FF8AD1','#FF7A5C','#7C93FF','#4FD08A'];
