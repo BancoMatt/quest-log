@@ -905,6 +905,7 @@ function renderNow(){
   const winY=(typeof window!=='undefined'&&window.scrollY)||0;
   if(cloudOn()&&loggedIn()&&(!S.currentUser||!S.users[S.currentUser]))S.currentUser=authUser;
   if(authChecking)renderSplash(app);
+  else if(bannedMsg)renderBanned(app);
   else if(cloudOn()&&!loggedIn())renderAuth(app);
   else if(showWelcome&&U())renderWelcome(app);
   else if(route.name==='gym')renderGym(app);
@@ -2026,10 +2027,10 @@ function wireCalc(root){
    S.users read-only. Never trust this client for anyone else's data — the wall
    is the RLS policy in secure-circles.sql. cloudPush writes only authUser's row;
    guardXP() (in the helpers section) caps implausible XP jumps. */
-const APP_VERSION='v47 · food+sync';
+const APP_VERSION='v49 · hard-lock';
 const _QC=(typeof window!=='undefined'&&window.QLCONFIG)||{};
 const CLOUD={url:_QC.url||'',anon:_QC.anon||''};
-let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null;
+let sb=null, authUser=null, myUid=null, sharedOwner=null, pulling=false, pushT=null, dirty=false, synced=false, authChecking=true, authMode='login', authBusy=false, authErr='', openCircle=null, bannedMsg=null;
 function cloudReady(){return !!(CLOUD.url&&CLOUD.anon&&window.supabase);}
 function cloudOn(){return cloudReady()&&sb!==null;}
 function loggedIn(){return cloudOn()?!!(authUser&&S.users&&S.users[authUser]):true;}
@@ -2038,6 +2039,13 @@ function editGuard(){if(cloudOn()&&!canEdit()){toast('Read-only');return false;}
 function persistLocal(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 function initCloud(){if(cloudReady()&&!sb){try{sb=window.supabase.createClient(CLOUD.url,CLOUD.anon,{auth:{persistSession:true,autoRefreshToken:true}});}catch(e){sb=null;}}}
 async function refreshAuth(){if(!cloudOn())return;try{const{data}=await sb.auth.getUser();const uid=data&&data.user&&data.user.id;if(uid){myUid=uid;}else{authUser=null;myUid=null;}}catch(e){/* offline: keep cached myUid/authUser */}}
+async function checkBan(){if(!cloudOn()||!myUid){return;}try{const{data,error}=await sb.from('bans').select('message').eq('uid',myUid);
+  if(!error&&data&&data.length){bannedMsg=data[0].message||'Your access to Quest Log has been removed.';}else{bannedMsg=null;}}catch(e){/* bans table may not exist yet */}}
+function renderBanned(app){app.innerHTML=`<div class="welcome"><div class="loginbox authbox" style="text-align:center">
+  <div style="font-size:42px;margin-bottom:8px">\u{1F6AB}</div>
+  <div class="wc-name" style="font-size:22px;background:none;-webkit-text-fill-color:#e06c75;color:#e06c75">Access removed</div>
+  <div class="mono" style="color:var(--muted);margin:16px 0 0;white-space:pre-wrap;line-height:1.6;font-size:13px">${escapeHtml(bannedMsg||'')}</div>
+  </div></div>`;}
 async function cloudPull(self){if(!cloudOn()||!myUid)return;try{
   const{data,error}=await sb.from('profiles').select('id,owner,data');if(error||!data)return;synced=true;pulling=true;
   const next={},omap={};let me=null;
@@ -2058,7 +2066,7 @@ async function cloudPull(self){if(!cloudOn()||!myUid)return;try{
   if(authUser&&S.users[authUser])_xpTrust=Math.max(0,S.users[authUser].totalXP||0);
   pulling=false;persistLocal();}catch(e){pulling=false;}}
 function pushShared(){return !!(myUid&&sharedOwner&&myUid===sharedOwner);}
-function cloudPush(){if(pulling||!cloudOn()||!loggedIn()||!synced)return;dirty=true;S.users[authUser]._v=Date.now();clearTimeout(pushT);pushT=setTimeout(async()=>{try{
+function cloudPush(){if(pulling||!cloudOn()||!loggedIn()||!synced||bannedMsg)return;dirty=true;S.users[authUser]._v=Date.now();clearTimeout(pushT);pushT=setTimeout(async()=>{try{
   const r1=await sb.from('profiles').update({data:S.users[authUser]}).eq('id',authUser);
   if(r1&&r1.error){toast('⚠ sync failed — check connection');}else{dirty=false;}}catch(e){toast('⚠ sync failed — check connection');}},700);}
 async function flushNow(){if(!cloudOn()||!loggedIn()||!dirty||!synced)return;clearTimeout(pushT);S.users[authUser]._v=Date.now();try{
@@ -2073,7 +2081,7 @@ function cloudSubscribe(){if(!cloudOn()||!sb.channel)return;try{sb.channel('prof
     normalizeGym();normalizeUsers();persistLocal();return;}
   else if(S.users[r.id]&&r.data&&Object.keys(r.data).length){S.users[r.id]=r.data;repaint=true;}
   normalizeGym();normalizeUsers();persistLocal();if(repaint)syncRender();}).subscribe();}catch(e){}}
-async function reconcile(){if(!cloudOn())return;await cloudPull(false);if(dirty)await flushNow();await loadCircles();syncRender();}
+async function reconcile(){if(!cloudOn())return;await checkBan();await cloudPull(false);if(dirty)await flushNow();await loadCircles();syncRender();}
 function typing(){const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);}
 let lastInteract=0,_srT=null;
 function markInteract(){lastInteract=Date.now();}
@@ -2096,7 +2104,7 @@ async function doSignup(name,email,password){authErr='';name=(name||'').trim();e
     if(!data.session){authBusy=false;authMode='login';authErr='Account created — confirm via the email we sent, then log in.';render();return;}
     myUid=data.user.id;pendingSignup={name:name.slice(0,18),email};
     await afterAuth();}catch(e){authErr='Sign up failed — check connection';authBusy=false;render();}}
-async function afterAuth(){await refreshAuth();await cloudPull(true);
+async function afterAuth(){await refreshAuth();await checkBan();await cloudPull(true);
   if(myUid&&!authUser){const nm=(pendingSignup&&pendingSignup.name)||'Player',em=(pendingSignup&&pendingSignup.email)||myUid;
     try{let ins=await sb.from('profiles').insert({id:myUid,owner:myUid,data:defUser(nm,pickColor(em))});
       if(ins&&ins.error){await new Promise(r=>setTimeout(r,600));await sb.from('profiles').insert({id:myUid,owner:myUid,data:defUser(nm,pickColor(em))});}
@@ -2175,7 +2183,7 @@ try{
   window.addEventListener('load',()=>{initCloud();['touchstart','touchmove','pointerdown','wheel','scroll'].forEach(ev=>window.addEventListener(ev,markInteract,{passive:true,capture:true}));
     if(!cloudOn()){authChecking=false;render();return;}
     sb.auth.getSession().then(({data})=>{
-      if(data&&data.session){refreshAuth().then(()=>cloudPull(true)).then(()=>loadCircles()).then(()=>{if(_gymRestored){_gymRestored=false;persist();}authChecking=false;cloudSubscribe();render();});}
+      if(data&&data.session){refreshAuth().then(()=>checkBan()).then(()=>cloudPull(true)).then(()=>loadCircles()).then(()=>{if(_gymRestored){_gymRestored=false;persist();}authChecking=false;cloudSubscribe();render();});}
       else{authChecking=false;authUser=null;render();}
     }).catch(()=>{authChecking=false;render();});
     document.addEventListener('visibilitychange',()=>{if(!cloudOn())return;if(document.visibilityState==='hidden')flushNow();else reconcile();});
